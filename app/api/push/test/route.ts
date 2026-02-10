@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
         const snapshot = await subsRef.get();
 
         if (snapshot.empty) {
-            return NextResponse.json({ success: false, error: "No subscriptions found. Please re-enable push." });
+            return NextResponse.json({ success: false, error: "No registered devices found. Please re-enable push." });
         }
 
         const payload = JSON.stringify({

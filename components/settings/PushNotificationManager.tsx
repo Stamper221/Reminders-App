@@ -177,9 +177,20 @@ export function PushNotificationManager() {
 
             {permission === "granted" ? (
                 <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm bg-green-50 dark:bg-green-950/30 p-2 rounded border border-green-200 dark:border-green-900">
-                        <CheckCircle className="w-4 h-4" />
-                        <span>Active & Ready</span>
+                    <div className="flex items-center justify-between text-green-600 dark:text-green-400 text-sm bg-green-50 dark:bg-green-950/30 p-2 rounded border border-green-200 dark:border-green-900">
+                        <div className="flex items-center gap-2">
+                            <CheckCircle className="w-4 h-4" />
+                            <span>Device Connected</span>
+                        </div>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs hover:bg-green-100 dark:hover:bg-green-900"
+                            onClick={subscribeToPush}
+                            disabled={loading}
+                        >
+                            Reconnect
+                        </Button>
                     </div>
                     <Button
                         variant="outline"
