@@ -16,7 +16,8 @@ export function PushNotificationManager() {
 
     useEffect(() => {
         if (typeof window !== "undefined" && "Notification" in window) {
-            setPermission(Notification.permission);
+            const perm = Notification.permission;
+            setPermission(perm);
 
             const ua = window.navigator.userAgent;
             const ios = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
@@ -24,8 +25,13 @@ export function PushNotificationManager() {
 
             const standalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
             setIsStandalone(!!standalone);
+
+            // If already granted, ensure sure backend has the subscription
+            if (perm === "granted") {
+                syncSubscription();
+            }
         }
-    }, []);
+    }, [user]);
 
     const urlBase64ToUint8Array = (base64String: string) => {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -38,6 +44,23 @@ export function PushNotificationManager() {
             outputArray[i] = rawData.charCodeAt(i);
         }
         return outputArray;
+    };
+
+    const syncSubscription = async () => {
+        if (!user) return;
+        try {
+            // Wait for SW to be ready
+            if (!('serviceWorker' in navigator)) return;
+            const reg = await navigator.serviceWorker.ready;
+            const sub = await reg.pushManager.getSubscription();
+            if (sub) {
+                // We have a subscription, make sure backend knows it
+                await saveSubscription(sub);
+                console.log("Subscription synced");
+            }
+        } catch (e) {
+            console.error("Sync failed", e);
+        }
     };
 
     const subscribeToPush = async () => {
@@ -53,7 +76,6 @@ export function PushNotificationManager() {
                 const existingSub = await reg.pushManager.getSubscription();
 
                 if (existingSub) {
-                    // Update server with existing sub just in case
                     await saveSubscription(existingSub);
                     toast.success("Push notifications enabled!");
                     setLoading(false);
@@ -107,7 +129,7 @@ export function PushNotificationManager() {
             if (data.success) {
                 toast.success(`Test sent to ${data.sent} device(s)!`);
             } else {
-                toast.error("Test failed: " + data.error);
+                toast.error("Test failed: " + (data.error || data.message || "Unknown error"));
             }
         } catch (e: any) {
             toast.error("Error sending test: " + e.message);
