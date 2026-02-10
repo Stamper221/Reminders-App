@@ -16,9 +16,14 @@ interface ReminderCardProps {
     onEdit: (reminder: Reminder) => void;
 }
 
+import { useSound } from "@/components/providers/SoundProvider";
+
+// ...
+
 export function ReminderCard({ reminder, onEdit }: ReminderCardProps) {
     const [loading, setLoading] = useState(false);
     const [justCompleted, setJustCompleted] = useState(false);
+    const { playSuccess } = useSound();
 
     const dueDate = reminder.due_at.toDate();
     const isOverdue = isPast(dueDate) && reminder.status === 'pending';
@@ -29,6 +34,7 @@ export function ReminderCard({ reminder, onEdit }: ReminderCardProps) {
         setLoading(true);
         if (reminder.status === 'pending') {
             setJustCompleted(true);
+            playSuccess();
             setTimeout(() => setJustCompleted(false), 600);
         }
         try {

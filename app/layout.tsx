@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
+import { SoundProvider } from "@/components/providers/SoundProvider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -31,7 +32,9 @@ export default function RootLayout({
           disableTransitionOnChange={false}
         >
           <AuthProvider>
-            {children}
+            <SoundProvider>
+              {children}
+            </SoundProvider>
           </AuthProvider>
           <Toaster
             position="top-right"

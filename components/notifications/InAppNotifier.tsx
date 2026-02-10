@@ -13,8 +13,13 @@ import { Bell } from "lucide-react";
  * when a reminder's trigger time (due_at - offset) is reached.
  * Only fires once per notification (tracked in a Set).
  */
+import { useSound } from "@/components/providers/SoundProvider";
+
+// ...
+
 export function InAppNotifier() {
     const { user } = useAuth();
+    const { playNotification } = useSound();
     const firedRef = useRef<Set<string>>(new Set());
     const [reminders, setReminders] = useState<Reminder[]>([]);
 
@@ -61,6 +66,7 @@ export function InAppNotifier() {
 
                     if (triggerTime <= now && !firedRef.current.has(key)) {
                         firedRef.current.add(key);
+                        playNotification();
 
                         let prefix = "Reminder";
                         if (notif.offsetMinutes === 0) prefix = "⏰ Now";

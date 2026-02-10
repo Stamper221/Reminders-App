@@ -30,18 +30,16 @@ export function MobileNav() {
 
     return (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">
-            {/* FAB */}
-            <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-10">
-                <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.92 }}
-                    onClick={openNew}
-                    className="h-14 w-14 rounded-full gradient-primary text-white shadow-lg flex items-center justify-center cursor-pointer"
-                    aria-label="New Reminder"
-                >
-                    <Plus className="h-6 w-6" />
-                </motion.button>
-            </div>
+            {/* FAB - Moved to bottom right to avoid blocking nav items */}
+            <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.92 }}
+                onClick={openNew}
+                className="fixed bottom-20 right-5 h-14 w-14 rounded-full gradient-primary text-white shadow-lg flex items-center justify-center cursor-pointer z-50 md:hidden"
+                aria-label="New Reminder"
+            >
+                <Plus className="h-6 w-6" />
+            </motion.button>
 
             {/* Nav Bar */}
             <div className="glass border-t border-border/50 safe-area-bottom">

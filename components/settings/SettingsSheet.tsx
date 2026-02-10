@@ -13,11 +13,13 @@ import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
-import { Loader2, Settings, Phone, MessageSquare, Globe, Wrench } from "lucide-react";
+import { Loader2, Settings, Phone, MessageSquare, Globe, Wrench, Music, Headphones, VolumeX, Volume2 } from "lucide-react";
+import { useSound } from "@/components/providers/SoundProvider";
 
 const schema = z.object({
     phoneNumber: z.string().optional(),
     smsOptIn: z.boolean(),
+    email: z.string().email().optional().or(z.literal("")),
     timezone: z.string(),
 });
 
@@ -27,12 +29,14 @@ export function SettingsSheet() {
     const { open, setOpen } = useSettingsModal();
     const { user, profile } = useAuth();
     const [loading, setLoading] = useState(false);
+    const { volume, setVolume, muted, setMuted, isMusicPlaying, toggleMusic } = useSound();
 
     const { register, handleSubmit, setValue, watch } = useForm<FormData>({
         resolver: zodResolver(schema),
         defaultValues: {
             phoneNumber: "",
             smsOptIn: false,
+            email: "",
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
     });
@@ -41,9 +45,10 @@ export function SettingsSheet() {
         if (profile) {
             setValue("phoneNumber", profile.phoneNumber || "");
             setValue("smsOptIn", profile.smsOptIn || false);
+            setValue("email", profile.email || user?.email || "");
             setValue("timezone", profile.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
         }
-    }, [profile, setValue]);
+    }, [profile, user, setValue]);
 
     const onSubmit = async (data: FormData) => {
         if (!user) return;
@@ -53,6 +58,7 @@ export function SettingsSheet() {
             await updateDoc(userRef, {
                 phoneNumber: data.phoneNumber,
                 smsOptIn: data.smsOptIn,
+                email: data.email,
                 timezone: data.timezone,
                 updatedAt: serverTimestamp(),
             });
@@ -101,6 +107,20 @@ export function SettingsSheet() {
                             <Input id="phoneNumber" placeholder="+1234567890" {...register("phoneNumber")} />
                         </div>
 
+                        {/* Email Card */}
+                        <div className="rounded-xl border bg-card p-4 space-y-3">
+                            <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+                                    <Globe className="h-4 w-4 text-indigo-500" />
+                                </div>
+                                <div>
+                                    <Label htmlFor="email" className="text-sm font-medium">Email Address</Label>
+                                    <p className="text-[11px] text-muted-foreground">For email notifications</p>
+                                </div>
+                            </div>
+                            <Input id="email" type="email" placeholder="you@example.com" {...register("email")} />
+                        </div>
+
                         {/* SMS Opt-In Card */}
                         <div className="rounded-xl border bg-card p-4">
                             <label htmlFor="smsOptIn" className="flex items-center gap-3 cursor-pointer">
@@ -118,6 +138,71 @@ export function SettingsSheet() {
                                     {...register("smsOptIn")}
                                 />
                             </label>
+                        </div>
+                    </div>
+
+                    {/* Audio & Focus Section */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                            <Music className="h-3.5 w-3.5" />
+                            <span className="text-xs font-semibold uppercase tracking-wider">Audio & Focus</span>
+                        </div>
+
+                        {/* Focus Music Card */}
+                        <div className="rounded-xl border bg-card p-4 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-lg bg-pink-500/10 flex items-center justify-center shrink-0">
+                                    <Headphones className="h-4 w-4 text-pink-500" />
+                                </div>
+                                <div>
+                                    <span className="text-sm font-medium block">Focus Music</span>
+                                    <span className="text-[11px] text-muted-foreground">Ambient background drone</span>
+                                </div>
+                            </div>
+                            <Button
+                                type="button"
+                                variant={isMusicPlaying ? "default" : "outline"}
+                                size="sm"
+                                onClick={toggleMusic}
+                                className={isMusicPlaying ? "bg-pink-500 hover:bg-pink-600" : ""}
+                            >
+                                {isMusicPlaying ? "Playing" : "Play"}
+                            </Button>
+                        </div>
+
+                        {/* Volume Control */}
+                        <div className="rounded-xl border bg-card p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-9 w-9 rounded-lg bg-slate-500/10 flex items-center justify-center shrink-0">
+                                        {muted ? <VolumeX className="h-4 w-4 text-slate-500" /> : <Volume2 className="h-4 w-4 text-slate-500" />}
+                                    </div>
+                                    <div>
+                                        <span className="text-sm font-medium block">App Sounds</span>
+                                        <span className="text-[11px] text-muted-foreground">Volume: {Math.round(volume * 100)}%</span>
+                                    </div>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setMuted(!muted)}
+                                >
+                                    {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                                </Button>
+                            </div>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.05"
+                                value={volume}
+                                onChange={(e) => {
+                                    setVolume(parseFloat(e.target.value));
+                                    if (muted) setMuted(false);
+                                }}
+                                className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                            />
                         </div>
                     </div>
 
