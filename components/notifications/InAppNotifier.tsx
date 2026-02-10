@@ -102,9 +102,9 @@ export function InAppNotifier() {
                             }
                         }
 
-                        if (isEmail && user) {
+                        if ((isEmail || isPush) && user) {
                             user.getIdToken().then(token => {
-                                fetch("/api/reminders/trigger-email", {
+                                fetch("/api/reminders/trigger", {
                                     method: "POST",
                                     headers: {
                                         "Content-Type": "application/json",
@@ -115,7 +115,7 @@ export function InAppNotifier() {
                                         notificationId: notif.id
                                     })
                                 }).then(res => {
-                                    if (res.ok && !isPush) {
+                                    if (res.ok && isEmail && !isPush) {
                                         toast.success(`Email sent: ${reminder.title}`);
                                     }
                                 }).catch(console.error);

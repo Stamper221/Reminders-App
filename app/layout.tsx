@@ -5,6 +5,7 @@ import { AuthProvider } from "@/components/providers/AuthProvider";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { SoundProvider } from "@/components/providers/SoundProvider";
+import { ServiceWorkerRegister } from "@/components/global/ServiceWorkerRegister";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -15,6 +16,15 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Reminders — Stay on track",
   description: "A beautiful, modern reminders app with flexible notifications",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Reminders",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export default function RootLayout({
@@ -31,6 +41,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange={false}
         >
+          <ServiceWorkerRegister />
           <AuthProvider>
             <SoundProvider>
               {children}

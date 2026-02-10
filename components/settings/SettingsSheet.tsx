@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { Loader2, Settings, Phone, MessageSquare, Globe, Wrench, Music, Headphones, VolumeX, Volume2, Bell, Mail } from "lucide-react";
 import { useSound } from "@/components/providers/SoundProvider";
+import { PushNotificationManager } from "./PushNotificationManager";
 
 const schema = z.object({
     phoneNumber: z.string().optional(),
@@ -139,6 +140,7 @@ export function SettingsSheet() {
                                 />
                             </label>
                         </div>
+                        <PushNotificationManager />
                     </div>
 
                     {/* Audio & Focus Section */}
