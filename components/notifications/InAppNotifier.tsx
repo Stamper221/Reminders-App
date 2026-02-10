@@ -57,8 +57,6 @@ export function InAppNotifier() {
                 const dueAt = reminder.due_at.toDate();
 
                 for (const notif of reminder.notifications) {
-                    // Only fire for push-type or both-type notifications (in-app counts as push)
-                    if (notif.type !== "push" && notif.type !== "both") continue;
                     if (notif.sent) continue;
 
                     const triggerTime = new Date(dueAt.getTime() - notif.offsetMinutes * 60000);
@@ -66,35 +64,61 @@ export function InAppNotifier() {
 
                     if (triggerTime <= now && !firedRef.current.has(key)) {
                         firedRef.current.add(key);
-                        playNotification();
 
-                        let prefix = "Reminder";
-                        if (notif.offsetMinutes === 0) prefix = "⏰ Now";
-                        else if (notif.offsetMinutes <= 5) prefix = "⏰ In 5 min";
-                        else if (notif.offsetMinutes <= 15) prefix = "🔔 In 15 min";
-                        else if (notif.offsetMinutes <= 30) prefix = "🔔 In 30 min";
-                        else if (notif.offsetMinutes <= 60) prefix = "🔔 In 1 hour";
-                        else prefix = "🔔 Upcoming";
+                        const isPush = notif.type === 'push' || notif.type === 'both';
+                        const isEmail = notif.type === 'email' || notif.type === 'both';
 
-                        toast(
-                            `${prefix}: ${reminder.title}`,
-                            {
-                                description: dueAt.toLocaleString(undefined, {
-                                    month: "short",
-                                    day: "numeric",
-                                    hour: "numeric",
-                                    minute: "2-digit",
-                                }),
-                                duration: 10000,
-                                icon: <Bell className="h-4 w-4 text-primary" />,
+                        if (isPush) {
+                            playNotification();
+
+                            let prefix = "Reminder";
+                            if (notif.offsetMinutes === 0) prefix = "⏰ Now";
+                            else if (notif.offsetMinutes <= 5) prefix = "⏰ In 5 min";
+                            else if (notif.offsetMinutes <= 15) prefix = "🔔 In 15 min";
+                            else if (notif.offsetMinutes <= 30) prefix = "🔔 In 30 min";
+                            else if (notif.offsetMinutes <= 60) prefix = "🔔 In 1 hour";
+                            else prefix = "🔔 Upcoming";
+
+                            toast(
+                                `${prefix}: ${reminder.title}`,
+                                {
+                                    description: dueAt.toLocaleString(undefined, {
+                                        month: "short",
+                                        day: "numeric",
+                                        hour: "numeric",
+                                        minute: "2-digit",
+                                    }),
+                                    duration: 10000,
+                                    icon: <Bell className="h-4 w-4 text-primary" />,
+                                }
+                            );
+
+                            // Also try browser Notification API
+                            if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+                                new Notification(`${prefix}: ${reminder.title}`, {
+                                    body: `Due at ${dueAt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`,
+                                    icon: "/icon-192x192.png",
+                                });
                             }
-                        );
+                        }
 
-                        // Also try browser Notification API if permission granted
-                        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-                            new Notification(`${prefix}: ${reminder.title}`, {
-                                body: `Due at ${dueAt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`,
-                                icon: "/icon-192x192.png",
+                        if (isEmail && user) {
+                            user.getIdToken().then(token => {
+                                fetch("/api/reminders/trigger-email", {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        "Authorization": `Bearer ${token}`
+                                    },
+                                    body: JSON.stringify({
+                                        reminderId: reminder.id,
+                                        notificationId: notif.id
+                                    })
+                                }).then(res => {
+                                    if (res.ok && !isPush) {
+                                        toast.success(`Email sent: ${reminder.title}`);
+                                    }
+                                }).catch(console.error);
                             });
                         }
                     }
