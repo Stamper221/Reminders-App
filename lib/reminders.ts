@@ -19,19 +19,22 @@ export const addReminder = async (uid: string, input: CreateReminderInput) => {
         input.repeatRule.startDate = dueAtTimestamp;
     }
 
-    const reminderData: Omit<Reminder, "id"> = {
+    const reminderData: Record<string, any> = {
         uid,
         title: input.title,
-        notes: input.notes,
+        notes: input.notes || '',
         due_at: dueAtTimestamp,
         timezone: input.timezone,
         status: 'pending',
         notifications: input.notifications.map(n => ({ ...n, sent: false })),
-        repeatRule: input.repeatRule,
-        generationStatus: input.repeatRule ? 'pending' : undefined,
         created_at: now,
         updated_at: now,
     };
+
+    if (input.repeatRule) {
+        reminderData.repeatRule = input.repeatRule;
+        reminderData.generationStatus = 'pending';
+    }
 
     const docRef = await addDoc(collectionRef, reminderData);
 
@@ -46,26 +49,16 @@ export const addReminder = async (uid: string, input: CreateReminderInput) => {
 export const updateReminder = async (uid: string, reminderId: string, updates: Partial<Reminder>) => {
     const docRef = doc(db, `users/${uid}/reminders`, reminderId);
 
-    // If due_at is updated, reset notification flags if passing new time
-    const dataToUpdate: any = {
-        ...updates,
-        updated_at: serverTimestamp()
-    };
-
-    if (updates.due_at) {
-        // Logic to reset flags could depend on how far in future, 
-        // but usually if time changes, we want to re-notify if pending.
-        // However, if we move it to tomorrow, 24h might check again.
-        // Simplest approach: reset flags if due_at changes.
-        // For new array model, we might need to fetch the existing one to reset 'sent' to false.
-        // But here we can't easily modify the array inside the update unless we read it first or use a script.
-        // For MVP: We will require the client to pass the generic reset if they want it, or we handle it in the UI.
-        // OR we just leave it for now and fix it in the Form logic.
-
-        // dataToUpdate.notify_24h_sent = false; // DEPRECATED
+    // Strip undefined values — Firestore rejects them
+    const cleanUpdates: Record<string, any> = {};
+    for (const [key, value] of Object.entries(updates)) {
+        if (value !== undefined) {
+            cleanUpdates[key] = value;
+        }
     }
+    cleanUpdates.updated_at = serverTimestamp();
 
-    return await updateDoc(docRef, dataToUpdate);
+    return await updateDoc(docRef, cleanUpdates);
 };
 
 export const deleteReminder = async (uid: string, reminderId: string) => {
