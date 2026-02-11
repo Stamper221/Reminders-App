@@ -1,15 +1,25 @@
-name: Cron Job
+name: Reminders Cron
 
 on:
   schedule:
-    - cron: '*/15 * * * *'  # Every 15 minutes
-  workflow_dispatch:
+    # Run every 5 minutes (fastest allowed by GitHub Actions generally)
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # Allow manual trigger
 
 jobs:
-  cron:
+  trigger-crons:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Vercel Cron
+      - name: Check Reminders (Every 5 mins)
         run: |
-          curl -X GET ${{ secrets.VERCEL_APP_URL }}/api/cron/check-reminders \
+          curl -L -X GET "${{ secrets.APP_URL }}/api/cron/check-reminders" \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: Process Repeats & Routines (Hourly)
+        if: endsWith(github.event.schedule, '0 * * * *') || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -L -X GET "${{ secrets.APP_URL }}/api/cron/process-repeats" \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          
+          curl -L -X GET "${{ secrets.APP_URL }}/api/cron/process-routines" \
           -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
