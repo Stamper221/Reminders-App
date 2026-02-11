@@ -53,9 +53,19 @@ export function ReminderForm({ initialData, onSuccess }: ReminderFormProps) {
     const [notifications, setNotifications] = useState<Omit<NotificationSetting, 'sent'>[]>([]);
     const [repeatRule, setRepeatRule] = useState<RepeatRule | undefined>(undefined);
 
-    const defaultDate = initialData ? initialData.due_at.toDate() : new Date();
+    // Safely convert Firestore Timestamp (admin or client SDK) to Date
+    const safeToDate = (ts: any): Date => {
+        if (!ts) return new Date();
+        if (ts instanceof Date) return ts;
+        if (typeof ts.toDate === 'function') return ts.toDate();
+        if (ts.seconds !== undefined) return new Date(ts.seconds * 1000);
+        if (ts._seconds !== undefined) return new Date(ts._seconds * 1000);
+        return new Date(ts);
+    };
+
+    const defaultDate = initialData ? safeToDate(initialData.due_at) : new Date();
     const defaultTime = initialData
-        ? format(initialData.due_at.toDate(), "HH:mm")
+        ? format(safeToDate(initialData.due_at), "HH:mm")
         : format(new Date(new Date().setHours(new Date().getHours() + 1, 0, 0, 0)), "HH:mm");
 
     const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
@@ -74,7 +84,7 @@ export function ReminderForm({ initialData, onSuccess }: ReminderFormProps) {
         if (initialData) {
             setValue("title", initialData.title);
             setValue("notes", initialData.notes || "");
-            const d = initialData.due_at.toDate();
+            const d = safeToDate(initialData.due_at);
             setValue("date", d);
             setValue("time", format(d, "HH:mm"));
 

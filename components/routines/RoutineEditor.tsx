@@ -301,6 +301,84 @@ export function RoutineEditor({ initialData, mode }: RoutineEditorProps) {
                                         placeholder="Details..."
                                     />
                                 </div>
+
+                                {/* Alert / Notification Settings */}
+                                <div className="space-y-3 border-t pt-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-muted-foreground">
+                                            <Bell className="h-3.5 w-3.5" />
+                                            <Label className="text-xs font-semibold uppercase tracking-wider">Alerts</Label>
+                                        </div>
+                                        <select
+                                            className="text-xs h-8 px-2 rounded-md border bg-background cursor-pointer"
+                                            value=""
+                                            onChange={(e) => {
+                                                const offset = Number(e.target.value);
+                                                if (stepForm.notifications.some(n => n.offsetMinutes === offset)) return;
+                                                setStepForm({
+                                                    ...stepForm,
+                                                    notifications: [
+                                                        ...stepForm.notifications,
+                                                        { id: uuidv4(), offsetMinutes: offset, type: 'push', sent: false }
+                                                    ]
+                                                });
+                                                e.target.value = "";
+                                            }}
+                                        >
+                                            <option value="" disabled>Add Alert</option>
+                                            <option value="0">At time</option>
+                                            <option value="5">5 min before</option>
+                                            <option value="15">15 min before</option>
+                                            <option value="30">30 min before</option>
+                                            <option value="60">1 hour before</option>
+                                        </select>
+                                    </div>
+
+                                    {stepForm.notifications.length === 0 && (
+                                        <p className="text-xs text-muted-foreground italic">No alerts set.</p>
+                                    )}
+                                    <div className="flex flex-wrap gap-2">
+                                        {stepForm.notifications.map((n, idx) => (
+                                            <div
+                                                key={n.id}
+                                                className="flex items-center gap-1.5 bg-primary/10 text-primary pl-2.5 pr-1 py-1 rounded-full text-xs font-medium"
+                                            >
+                                                <Bell className="h-3 w-3 shrink-0" />
+                                                <span className="whitespace-nowrap">
+                                                    {n.offsetMinutes === 0 ? "At time" : `${n.offsetMinutes}m before`}
+                                                </span>
+                                                <span className="text-[10px] opacity-70">via</span>
+                                                <select
+                                                    value={n.type}
+                                                    onChange={(e) => {
+                                                        const updated = [...stepForm.notifications];
+                                                        updated[idx] = { ...updated[idx], type: e.target.value as any };
+                                                        setStepForm({ ...stepForm, notifications: updated });
+                                                    }}
+                                                    className="bg-transparent text-primary text-[10px] font-bold uppercase border-none outline-none cursor-pointer pr-0"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    <option value="sms">SMS</option>
+                                                    <option value="email">Email</option>
+                                                    <option value="push">Push</option>
+                                                    <option value="both">All</option>
+                                                </select>
+                                                <button
+                                                    type="button"
+                                                    className="h-4 w-4 rounded-full flex items-center justify-center hover:bg-primary/20 transition-colors shrink-0"
+                                                    onClick={() => {
+                                                        setStepForm({
+                                                            ...stepForm,
+                                                            notifications: stepForm.notifications.filter((_, i) => i !== idx)
+                                                        });
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-2.5 w-2.5" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                             <DialogFooter>
                                 <Button onClick={handleStepSave}>Save Step</Button>
