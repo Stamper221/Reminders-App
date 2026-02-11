@@ -125,27 +125,33 @@ export function ReminderForm({ initialData, onSuccess }: ReminderFormProps) {
             const dueAt = new Date(data.date);
             dueAt.setHours(hours, minutes, 0, 0);
 
-            const payload = {
+            const payload: Record<string, any> = {
                 title: data.title,
-                notes: data.notes,
+                notes: data.notes || '',
                 due_at: dueAt,
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                 notifications: notifications,
-                repeatRule: repeatRule,
             };
+            // Only include repeatRule if set (Firestore rejects undefined)
+            if (repeatRule) {
+                payload.repeatRule = repeatRule;
+            }
 
             if (initialData && initialData.id) {
-                await updateReminder(user.uid, initialData.id, {
+                const updatePayload: Record<string, any> = {
                     title: data.title,
-                    notes: data.notes,
+                    notes: data.notes || '',
                     due_at: dueAt as any,
                     timezone: payload.timezone,
                     notifications: notifications as any,
-                    repeatRule: repeatRule,
-                });
+                };
+                if (repeatRule) {
+                    updatePayload.repeatRule = repeatRule;
+                }
+                await updateReminder(user.uid, initialData.id, updatePayload);
                 toast.success("Reminder updated");
             } else {
-                const docRef = await addReminder(user.uid, payload);
+                const docRef = await addReminder(user.uid, payload as any);
 
                 // Eagerly generate future occurrences for repeating reminders
                 if (repeatRule && docRef.id) {
