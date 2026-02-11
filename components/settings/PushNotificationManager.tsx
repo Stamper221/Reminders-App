@@ -126,10 +126,15 @@ export function PushNotificationManager() {
                 headers: { "Authorization": `Bearer ${token}` }
             });
             const data = await res.json();
+
             if (data.success) {
-                toast.success(`Test sent to ${data.sent} device(s)!`);
+                toast.success(`Sent to ${data.sent} device(s)`);
+            } else if (data.sent === 0 && data.total > 0) {
+                toast.error("Failed to send to any devices");
+            } else if (data.total === 0) {
+                toast.error("No connected devices found");
             } else {
-                toast.error("Test failed: " + (data.error || data.message || "Unknown error"));
+                toast.error("Test failed: " + (data.error || "Unknown error"));
             }
         } catch (e: any) {
             toast.error("Error sending test: " + e.message);

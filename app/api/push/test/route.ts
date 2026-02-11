@@ -94,12 +94,14 @@ export async function POST(request: NextRequest) {
 
         const results = await Promise.all(promises);
         const successCount = results.filter(r => r.success).length;
+        const failures = results.filter(r => !r.success);
 
         return NextResponse.json({
-            success: true,
+            success: successCount > 0,
             sent: successCount,
             total: results.length,
-            details: results
+            details: results,
+            failures: failures.length > 0 ? failures : undefined
         });
 
     } catch (error: any) {

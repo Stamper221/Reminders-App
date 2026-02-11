@@ -3,6 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import twilio from "twilio";
 import nodemailer from "nodemailer";
+import { formatInTimeZone } from "date-fns-tz";
 
 // Initialize Firebase Admin if not already done
 if (getApps().length === 0) {
@@ -99,9 +100,10 @@ export async function GET(request: NextRequest) {
                 const triggerTime = new Date(dueAt.getTime() - notification.offsetMinutes * 60000);
                 if (triggerTime <= now) {
                     let sent = false;
-                    const timeString = dueAt.toLocaleString('en-US', {
-                        timeZone: reminder.timezone || user.timezone || 'UTC'
-                    });
+                    const userTimezone = reminder.timezone || user.timezone || 'UTC';
+
+                    const timeString = formatInTimeZone(dueAt, userTimezone, "h:mm a");
+                    console.log(`Sending notification for ${reminder.title} at ${timeString} (${userTimezone})`);
 
                     let prefix = "Reminder:";
                     if (notification.offsetMinutes === 1440) prefix = "Tomorrow:";

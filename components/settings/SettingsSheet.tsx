@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Settings, Phone, MessageSquare, Globe, Wrench, Music, Headphones, VolumeX, Volume2, Bell, Mail, Clock, Briefcase } from "lucide-react";
 import { useSound } from "@/components/providers/SoundProvider";
 import { PushNotificationManager } from "./PushNotificationManager";
+import { ConnectedDevices } from "./ConnectedDevices";
 
 const schema = z.object({
     phoneNumber: z.string().optional(),
@@ -141,6 +142,9 @@ export function SettingsSheet() {
                             </label>
                         </div>
                         <PushNotificationManager />
+                        <div className="border-t pt-4">
+                            <ConnectedDevices />
+                        </div>
                     </div>
 
                     {/* Audio & Focus Section */}
