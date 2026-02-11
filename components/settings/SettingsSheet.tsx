@@ -13,7 +13,7 @@ import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
-import { Loader2, Settings, Phone, MessageSquare, Globe, Wrench, Music, Headphones, VolumeX, Volume2, Bell, Mail } from "lucide-react";
+import { Loader2, Settings, Phone, MessageSquare, Globe, Wrench, Music, Headphones, VolumeX, Volume2, Bell, Mail, Clock, Briefcase } from "lucide-react";
 import { useSound } from "@/components/providers/SoundProvider";
 import { PushNotificationManager } from "./PushNotificationManager";
 
@@ -377,6 +377,88 @@ export function SettingsSheet() {
                             }}
                         >
                             Trigger Push
+                        </Button>
+                    </div>
+
+                    {/* Trigger Repeats (Debug) */}
+                    <div className="rounded-xl border bg-card p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+                                <Clock className="h-4 w-4 text-green-500" />
+                            </div>
+                            <div>
+                                <span className="text-sm font-medium block">Trigger Repeats</span>
+                                <span className="text-[11px] text-muted-foreground">Force check for recurring reminders</span>
+                            </div>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            className="w-full cursor-pointer h-9"
+                            onClick={async (e) => {
+                                e.preventDefault();
+                                try {
+                                    if (!user) return;
+                                    const token = await user.getIdToken();
+                                    toast.promise(
+                                        fetch("/api/cron/process-repeats", {
+                                            headers: { Authorization: `Bearer ${token}` }
+                                        }).then(async res => {
+                                            const data = await res.json();
+                                            if (!res.ok) throw new Error(data.error);
+                                            return data;
+                                        }),
+                                        {
+                                            loading: "Processing...",
+                                            success: (data) => `Generated ${data.generated} instances`,
+                                            error: "Failed to process"
+                                        }
+                                    );
+                                } catch (err) { toast.error("Error"); }
+                            }}
+                        >
+                            Run Repeats Job
+                        </Button>
+                    </div>
+
+                    {/* Trigger Routines (Debug) */}
+                    <div className="rounded-xl border bg-card p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="h-9 w-9 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
+                                <Briefcase className="h-4 w-4 text-orange-500" />
+                            </div>
+                            <div>
+                                <span className="text-sm font-medium block">Trigger Routines</span>
+                                <span className="text-[11px] text-muted-foreground">Force check for active routines</span>
+                            </div>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            className="w-full cursor-pointer h-9"
+                            onClick={async (e) => {
+                                e.preventDefault();
+                                try {
+                                    if (!user) return;
+                                    const token = await user.getIdToken();
+                                    toast.promise(
+                                        fetch("/api/cron/process-routines", {
+                                            headers: { Authorization: `Bearer ${token}` }
+                                        }).then(async res => {
+                                            const data = await res.json();
+                                            if (!res.ok) throw new Error(data.error);
+                                            return data;
+                                        }),
+                                        {
+                                            loading: "Processing...",
+                                            success: (data) => `Generated ${data.generated} instances`,
+                                            error: "Failed to process"
+                                        }
+                                    );
+                                } catch (err) { toast.error("Error"); }
+                            }}
+                        >
+                            Run Routines Job
                         </Button>
                     </div>
                 </div>

@@ -17,6 +17,10 @@ export const metadata: Metadata = {
   title: "Reminders — Stay on track",
   description: "A beautiful, modern reminders app with flexible notifications",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icon-192x192.png",
+    apple: "/apple-touch-icon.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

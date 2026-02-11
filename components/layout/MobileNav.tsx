@@ -9,7 +9,8 @@ import {
     CheckCircle,
     Clock,
     Plus,
-    Settings
+    Settings,
+    Briefcase
 } from "lucide-react";
 import { useReminderModal } from "@/components/providers/ReminderModalProvider";
 import { useSettingsModal } from "@/components/providers/SettingsModalProvider";
@@ -23,7 +24,7 @@ export function MobileNav() {
     const links = [
         { href: "/", label: "Today", icon: LayoutDashboard },
         { href: "/upcoming", label: "Upcoming", icon: Clock },
-        { href: "/calendar", label: "Calendar", icon: Calendar },
+        { href: "/routines", label: "Routines", icon: Briefcase },
         { href: "/completed", label: "Done", icon: CheckCircle },
         { href: "#settings", label: "Settings", icon: Settings, onClick: openSettings },
     ];

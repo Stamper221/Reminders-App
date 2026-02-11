@@ -59,10 +59,19 @@ export function CalendarWrapper() {
         }
     };
 
+    const safeToDate = (ts: any): Date => {
+        if (!ts) return new Date();
+        if (ts instanceof Date) return ts;
+        if (typeof ts.toDate === 'function') return ts.toDate();
+        if (ts.seconds !== undefined) return new Date(ts.seconds * 1000);
+        if (ts._seconds !== undefined) return new Date(ts._seconds * 1000);
+        return new Date(ts);
+    };
+
     const events = reminders.map(r => ({
         id: r.id,
         title: r.title,
-        start: r.due_at.toDate(),
+        start: safeToDate(r.due_at),
         backgroundColor: r.status === 'done' ? '#10b981' : 'var(--primary)',
         borderColor: r.status === 'done' ? '#10b981' : 'var(--primary)',
         classNames: r.status === 'done' ? ['opacity-50'] : [],

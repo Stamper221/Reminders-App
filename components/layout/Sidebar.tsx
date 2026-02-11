@@ -10,7 +10,8 @@ import {
     Clock,
     LogOut,
     Settings,
-    Bell
+    Bell,
+    Briefcase // Routines
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -45,6 +46,7 @@ export function Sidebar({ className }: SidebarProps) {
         { href: "/upcoming", label: "Upcoming", icon: Clock },
         { href: "/calendar", label: "Calendar", icon: Calendar },
         { href: "/completed", label: "Completed", icon: CheckCircle },
+        { href: "/routines", label: "Routines", icon: Briefcase },
     ];
 
     // Get user initial for avatar

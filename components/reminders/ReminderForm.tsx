@@ -15,11 +15,12 @@ import { Calendar as CalendarIcon, Loader2, X, Bell, Clock, FileText, Sparkles }
 import { useAuth } from "@/components/providers/AuthProvider";
 import { addReminder, updateReminder } from "@/lib/reminders";
 import { Select as NotifSelect, SelectContent as NotifSelectContent, SelectItem as NotifSelectItem, SelectTrigger as NotifSelectTrigger, SelectValue as NotifSelectValue } from "@/components/ui/select";
-import { Reminder, NotificationSetting, NotificationType } from "@/lib/types";
+import { Reminder, NotificationSetting, NotificationType, RepeatRule } from "@/lib/types";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from "framer-motion";
+import { RepeatRuleSelector } from "./RepeatRuleSelector";
 
 const schema = z.object({
     title: z.string().min(1, "Title is required"),
@@ -50,6 +51,7 @@ export function ReminderForm({ initialData, onSuccess }: ReminderFormProps) {
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [notifications, setNotifications] = useState<Omit<NotificationSetting, 'sent'>[]>([]);
+    const [repeatRule, setRepeatRule] = useState<RepeatRule | undefined>(undefined);
 
     const defaultDate = initialData ? initialData.due_at.toDate() : new Date();
     const defaultTime = initialData
@@ -78,6 +80,9 @@ export function ReminderForm({ initialData, onSuccess }: ReminderFormProps) {
 
             if (initialData.notifications) {
                 setNotifications(initialData.notifications);
+            }
+            if (initialData.repeatRule) {
+                setRepeatRule(initialData.repeatRule);
             }
         } else {
             setNotifications([
@@ -116,6 +121,7 @@ export function ReminderForm({ initialData, onSuccess }: ReminderFormProps) {
                 due_at: dueAt,
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                 notifications: notifications,
+                repeatRule: repeatRule,
             };
 
             if (initialData && initialData.id) {
@@ -125,11 +131,37 @@ export function ReminderForm({ initialData, onSuccess }: ReminderFormProps) {
                     due_at: dueAt as any,
                     timezone: payload.timezone,
                     notifications: notifications as any,
+                    repeatRule: repeatRule,
                 });
                 toast.success("Reminder updated");
             } else {
-                await addReminder(user.uid, payload);
-                toast.success("Reminder created");
+                const docRef = await addReminder(user.uid, payload);
+
+                // Eagerly generate future occurrences for repeating reminders
+                if (repeatRule && docRef.id) {
+                    try {
+                        const token = await user.getIdToken();
+                        const res = await fetch("/api/reminders/generate-repeats", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`,
+                            },
+                            body: JSON.stringify({ reminderId: docRef.id }),
+                        });
+                        const result = await res.json();
+                        if (res.ok && result.generated > 0) {
+                            toast.success(`Created reminder + ${result.generated} future occurrences`);
+                        } else {
+                            toast.success("Reminder created");
+                        }
+                    } catch (genErr) {
+                        console.warn("Eager generation failed, cron will pick it up:", genErr);
+                        toast.success("Reminder created");
+                    }
+                } else {
+                    toast.success("Reminder created");
+                }
             }
             onSuccess();
         } catch (error: any) {
@@ -213,6 +245,11 @@ export function ReminderForm({ initialData, onSuccess }: ReminderFormProps) {
                         {errors.time && <span className="text-destructive text-xs">{errors.time.message}</span>}
                     </div>
                 </div>
+            </div>
+
+            {/* Repeat Rule */}
+            <div className="space-y-2 border-t border-border/50 pt-2">
+                <RepeatRuleSelector value={repeatRule} onChange={setRepeatRule} />
             </div>
 
             {/* Notifications */}

@@ -14,6 +14,11 @@ export const addReminder = async (uid: string, input: CreateReminderInput) => {
     const dueAtTimestamp = Timestamp.fromDate(input.due_at);
     const now = Timestamp.now();
 
+    // Set startDate for repeatRule if missing
+    if (input.repeatRule && !input.repeatRule.startDate) {
+        input.repeatRule.startDate = dueAtTimestamp;
+    }
+
     const reminderData: Omit<Reminder, "id"> = {
         uid,
         title: input.title,
@@ -22,11 +27,20 @@ export const addReminder = async (uid: string, input: CreateReminderInput) => {
         timezone: input.timezone,
         status: 'pending',
         notifications: input.notifications.map(n => ({ ...n, sent: false })),
+        repeatRule: input.repeatRule,
+        generationStatus: input.repeatRule ? 'pending' : undefined,
         created_at: now,
         updated_at: now,
     };
 
-    return await addDoc(collectionRef, reminderData);
+    const docRef = await addDoc(collectionRef, reminderData);
+
+    // If repeated, set rootId to itself
+    if (input.repeatRule) {
+        await updateDoc(docRef, { rootId: docRef.id });
+    }
+
+    return docRef;
 };
 
 export const updateReminder = async (uid: string, reminderId: string, updates: Partial<Reminder>) => {
@@ -69,8 +83,59 @@ export const snoozeReminder = async (uid: string, reminderId: string, until: Dat
     return await updateReminder(uid, reminderId, {
         status: 'snoozed',
         snoozed_until: snoozeTimestamp,
-        // Typically snooze means "don't show until then" or "remind me then".
-        // If we want to resend SMS, we might need new logic.
-        // For now, simple status update.
     });
+};
+
+/**
+ * Clears all upcoming (pending/snoozed) reminders including repeat chains.
+ */
+export const clearUpcomingReminders = async (uid: string) => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const collRef = collection(db, `users/${uid}/reminders`);
+    const q = query(collRef, where("status", "in", ["pending", "snoozed"]));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return 0;
+
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    return snapshot.size;
+};
+
+/**
+ * Clears all completed (done) reminders.
+ */
+export const clearCompletedReminders = async (uid: string) => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const collRef = collection(db, `users/${uid}/reminders`);
+    const q = query(collRef, where("status", "==", "done"));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return 0;
+
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    return snapshot.size;
+};
+
+/**
+ * Clears ALL reminders (used from calendar).
+ */
+export const clearAllReminders = async (uid: string) => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const collRef = collection(db, `users/${uid}/reminders`);
+    const snapshot = await getDocs(collRef);
+    if (snapshot.empty) return 0;
+
+    // Firestore batch limit is 500; chunk if needed
+    const chunks = [];
+    for (let i = 0; i < snapshot.docs.length; i += 500) {
+        chunks.push(snapshot.docs.slice(i, i + 500));
+    }
+    for (const chunk of chunks) {
+        const batch = writeBatch(db);
+        chunk.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+    }
+    return snapshot.size;
 };
