@@ -414,10 +414,10 @@ export function RoutineEditor({ initialData, mode }: RoutineEditorProps) {
                                     )}
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); editStep(index); }}>
+                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.preventDefault(); e.stopPropagation(); editStep(index); }}>
                                         <Pencil className="w-4 h-4" />
                                     </Button>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={(e) => { e.stopPropagation(); deleteStep(index); }}>
+                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteStep(index); }}>
                                         <Trash2 className="w-4 h-4" />
                                     </Button>
                                 </div>
