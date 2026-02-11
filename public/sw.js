@@ -14,15 +14,7 @@ self.addEventListener('push', function (event) {
         };
 
         event.waitUntil(
-            clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
-                // Check if app is in foreground
-                const isFocused = windowClients.some(client => client.focused);
-                if (isFocused) {
-                    console.log('App in foreground, cloud push suppressed.');
-                    return;
-                }
-                return self.registration.showNotification(data.title, options);
-            })
+            self.registration.showNotification(data.title, options)
         );
     }
 });

@@ -55,8 +55,12 @@ export function PushNotificationManager() {
             const sub = await reg.pushManager.getSubscription();
             if (sub) {
                 // We have a subscription, make sure backend knows it
-                await saveSubscription(sub);
-                console.log("Subscription synced");
+                // Using JSON.stringify ensures we get keys properly
+                const subJson = sub.toJSON();
+                if (subJson.keys) {
+                    await saveSubscription(sub);
+                    console.log("Subscription synced");
+                }
             }
         } catch (e) {
             console.error("Sync failed", e);
@@ -197,15 +201,35 @@ export function PushNotificationManager() {
                             Reconnect
                         </Button>
                     </div>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={sendTestPush}
-                        disabled={testing}
-                        className="w-full"
-                    >
-                        {testing ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : "Test Push Now"}
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={sendTestPush}
+                            disabled={testing}
+                            className="flex-1"
+                        >
+                            {testing ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : "Test Push"}
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={async () => {
+                                if (confirm("Remove ALL devices? You will need to reconnect this device.")) {
+                                    const token = await user?.getIdToken();
+                                    await fetch("/api/push/devices", {
+                                        method: "DELETE",
+                                        headers: { "Authorization": `Bearer ${token}` }
+                                    });
+                                    setPermission("default"); // Force re-check
+                                    toast.success("All devices removed");
+                                }
+                            }}
+                            className="flex-1"
+                        >
+                            Clear All
+                        </Button>
+                    </div>
                 </div>
             ) : (
                 <div className="space-y-2">
