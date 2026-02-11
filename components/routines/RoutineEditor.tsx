@@ -28,7 +28,7 @@ import {
     DialogFooter
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, Clock, MoveRight, Save, Loader2, Bell } from "lucide-react";
+import { Plus, Trash2, Clock, Pencil, Save, Loader2, Bell } from "lucide-react";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { addRoutine, updateRoutine } from "@/lib/routines";
@@ -395,20 +395,29 @@ export function RoutineEditor({ initialData, mode }: RoutineEditorProps) {
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: "auto" }}
                                 exit={{ opacity: 0, height: 0 }}
-                                className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:shadow-sm group"
+                                className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:shadow-sm group cursor-pointer overflow-hidden"
+                                onClick={() => editStep(index)}
                             >
-                                <div className="font-mono text-sm font-medium bg-muted px-2 py-1 rounded">
+                                <div className="font-mono text-sm font-medium bg-muted px-2 py-1 rounded shrink-0">
                                     {step.time}
                                 </div>
-                                <div className="flex-1">
-                                    <div className="font-medium">{step.title}</div>
-                                    {step.notes && <div className="text-xs text-muted-foreground truncate">{step.notes}</div>}
+                                <div className="flex-1 min-w-0 overflow-hidden">
+                                    <div className="font-medium truncate">{step.title}</div>
+                                    {step.notes && <div className="text-xs text-muted-foreground line-clamp-2 break-words">{step.notes}</div>}
+                                    {step.notifications && step.notifications.length > 0 && (
+                                        <div className="flex items-center gap-1 mt-1">
+                                            <Bell className="h-3 w-3 text-muted-foreground shrink-0" />
+                                            <span className="text-[10px] text-muted-foreground">
+                                                {step.notifications.length} alert{step.notifications.length !== 1 ? 's' : ''}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => editStep(index)}>
-                                        <MoveRight className="w-4 h-4" /> {/* Edit icon */}
+                                <div className="flex items-center gap-1 shrink-0 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); editStep(index); }}>
+                                        <Pencil className="w-4 h-4" />
                                     </Button>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteStep(index)}>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={(e) => { e.stopPropagation(); deleteStep(index); }}>
                                         <Trash2 className="w-4 h-4" />
                                     </Button>
                                 </div>
