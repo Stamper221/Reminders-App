@@ -173,7 +173,11 @@ export async function GET(request: NextRequest) {
                                         keys: subData.keys
                                     };
                                     try {
-                                        await webpush.sendNotification(pushSubscription as any, payload);
+                                        await webpush.sendNotification(
+                                            pushSubscription as any,
+                                            payload,
+                                            { headers: { 'Urgency': 'high' } }
+                                        );
                                         return true;
                                     } catch (err: any) {
                                         if (err.statusCode === 410 || err.statusCode === 404) {

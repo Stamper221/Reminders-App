@@ -109,7 +109,11 @@ export async function GET(request: NextRequest) {
                             const sub = subDoc.data();
                             try {
                                 const payload = JSON.stringify({ title: "Debug Test", body: "It works!", icon: "/icon-192x192.png" });
-                                await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys } as any, payload);
+                                await webpush.sendNotification(
+                                    { endpoint: sub.endpoint, keys: sub.keys } as any,
+                                    payload,
+                                    { headers: { 'Urgency': 'high' } }
+                                );
                                 log(`    -> Sent to ${subDoc.id}`);
                             } catch (e: any) {
                                 log(`    -> sendNotification failed: ${e.statusCode} - ${e.message}`);
