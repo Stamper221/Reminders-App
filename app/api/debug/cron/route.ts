@@ -52,6 +52,14 @@ export async function GET(request: NextRequest) {
         const now = new Date();
         log(`Server Time: ${now.toISOString()}`);
 
+        // Check CRON_SECRET
+        const secret = process.env.CRON_SECRET;
+        if (secret) {
+            log(`✅ CRON_SECRET is configured (starts with: ${secret.substring(0, 3)}...)`);
+        } else {
+            log(`❌ CRON_SECRET IS MISSING in Environment Variables! Authentication will fail.`);
+        }
+
         const remindersRef = db.collectionGroup("reminders");
         // Check if query throws error (Index missing?)
         let snapshot;
