@@ -87,6 +87,10 @@ export async function GET(request: NextRequest) {
             log(`Checking Reminder: ${reminder.title} (UID: ${uid})`);
             log(`Due At: ${dueAt.toISOString()} | Now: ${now.toISOString()}`);
 
+            // Debug: Check subscriptions count even if not due
+            const debugSubs = await db.collection("users").doc(uid).collection("push_subscriptions").get();
+            log(`  [Debug Info] User has ${debugSubs.size} active push subscriptions.`);
+
             // ... Logic matching main cron ...
             // Simplified for debug:
 

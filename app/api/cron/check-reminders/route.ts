@@ -58,6 +58,13 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ message: "No pending reminders." });
         }
 
+        // Sort by due_at ASC in memory to prioritise immediate reminders
+        const sortedDocs = snapshot.docs.sort((a, b) => {
+            const dateA = a.data().due_at?.toDate ? a.data().due_at.toDate() : new Date(a.data().due_at);
+            const dateB = b.data().due_at?.toDate ? b.data().due_at.toDate() : new Date(b.data().due_at);
+            return dateA.getTime() - dateB.getTime();
+        });
+
         const batch = db.batch();
         let commitCount = 0;
         const userCache: Record<string, any> = {};
@@ -85,7 +92,7 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        for (const doc of snapshot.docs) {
+        for (const doc of sortedDocs) {
             const reminder = doc.data();
             const uid = reminder.uid;
             const dueAt = reminder.due_at?.toDate ? reminder.due_at.toDate() : new Date(reminder.due_at);
