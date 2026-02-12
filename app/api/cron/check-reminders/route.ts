@@ -4,6 +4,7 @@ import { initializeApp, getApps, cert } from "firebase-admin/app";
 import twilio from "twilio";
 import nodemailer from "nodemailer";
 import { formatInTimeZone } from "date-fns-tz";
+import webpush from "web-push";
 
 // Initialize Firebase Admin if not already done
 if (getApps().length === 0) {
@@ -29,6 +30,15 @@ if (getApps().length === 0) {
 }
 
 const db = getFirestore();
+
+// Initialize VAPID
+const vapidSubject = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
+const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+const privateKey = process.env.VAPID_PRIVATE_KEY;
+
+if (publicKey && privateKey) {
+    webpush.setVapidDetails(vapidSubject, publicKey, privateKey);
+}
 
 export async function GET(request: NextRequest) {
     // secure the endpoint with a secret shared with Vercel Cron
@@ -139,6 +149,46 @@ export async function GET(request: NextRequest) {
                             sent = true;
                         } catch (e) {
                             console.error(`Failed to send Email: ${e}`);
+                        }
+                    }
+
+                    // Web Push
+                    if ((notification.type === 'push' || notification.type === 'both' || notification.type === 'all') && publicKey && privateKey) {
+                        try {
+                            const subsRef = db.collection("users").doc(uid).collection("push_subscriptions");
+                            const subsSnapshot = await subsRef.get();
+
+                            if (!subsSnapshot.empty) {
+                                const payload = JSON.stringify({
+                                    title: prefix.replace(':', ''),
+                                    body: `${reminder.title} is due at ${timeString}`,
+                                    url: `/`,
+                                    icon: "/icon-192x192.png"
+                                });
+
+                                const promises = subsSnapshot.docs.map(async (subDoc) => {
+                                    const subData = subDoc.data();
+                                    const pushSubscription = {
+                                        endpoint: subData.endpoint,
+                                        keys: subData.keys
+                                    };
+                                    try {
+                                        await webpush.sendNotification(pushSubscription as any, payload);
+                                        return true;
+                                    } catch (err: any) {
+                                        if (err.statusCode === 410 || err.statusCode === 404) {
+                                            await subDoc.ref.delete();
+                                        }
+                                        console.error(`Push failed for ${subDoc.id}:`, err.message);
+                                        return false;
+                                    }
+                                });
+
+                                const results = await Promise.all(promises);
+                                if (results.some(r => r)) sent = true;
+                            }
+                        } catch (e) {
+                            console.error(`Failed to process Push: ${e}`);
                         }
                     }
 
