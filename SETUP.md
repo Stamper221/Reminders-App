@@ -121,15 +121,17 @@ To make your app accessible from your phone without your computer running:
 
 To ensure recurring reminders generate automatically, you need to set up the Cron job.
 
-### Vercel Cron (Recommended)
-If deploying to Vercel, the `vercel.json` file handles the schedule automatically. You just need to set the secret:
+### Vercel Cron (Simpler, but Daily only on Free Plan)
+If deploying to Vercel, the `vercel.json` file handles the schedule.
+*Note: On the Vercel Hobby (Free) plan, crons can only run once per day (`0 9 * * *`). For hourly/minute precision, use GitHub Actions below.*
+
 1.  Go to your Vercel Project Settings > Environment Variables.
 2.  Add a new variable:
     -   **Key**: `CRON_SECRET`
     -   **Value**: (Generate a random string, e.g., `openssl rand -hex 32`)
 
-### GitHub Actions (Alternative)
-If you prefer to use GitHub Actions to trigger the cron:
+### GitHub Actions (Recommended for frequent updates)
+GitHub Actions can run as often as every 5 minutes for free.
 1.  Go to your GitHub Repository > Settings > Secrets and variables > Actions.
 2.  Add the following secrets:
     -   `CRON_SECRET`: The same random string you generated.
