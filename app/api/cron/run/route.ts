@@ -328,28 +328,48 @@ export async function GET(request: NextRequest) {
         const futureWindow = new Date();
         futureWindow.setDate(futureWindow.getDate() + 14); // Generate next 2 weeks of repeats
 
-        // Run concurrently? 
-        // Process Reminders is most critical (1 min precision).
-        // Repeats/Routines can happen anytime, but good to keep synced.
+        // Run sequentially or concurrently, but capture errors individually
+        let notifResult = { count: 0, error: null };
+        try {
+            notifResult.count = await processReminders(now);
+        } catch (e: any) {
+            console.error("Reminders Check Failed:", e);
+            notifResult.error = e.message;
+        }
 
-        const [notifCount, repeatCount, routineCount] = await Promise.all([
-            processReminders(now),
-            processRepeats(futureWindow),
-            processRoutines(now)
-        ]);
+        let repeatResult = { count: 0, error: null };
+        try {
+            repeatResult.count = await processRepeats(futureWindow);
+        } catch (e: any) {
+            console.error("Repeats Check Failed:", e);
+            repeatResult.error = e.message;
+        }
+
+        let routineResult = { count: 0, error: null };
+        try {
+            routineResult.count = await processRoutines(now);
+        } catch (e: any) {
+            console.error("Routines Check Failed:", e);
+            routineResult.error = e.message;
+        }
 
         return NextResponse.json({
-            success: true,
+            success: !notifResult.error && !repeatResult.error && !routineResult.error,
             timestamp: now.toISOString(),
             stats: {
-                notificationsSent: notifCount, // Approximate (processed count)
-                repeatsGenerated: repeatCount,
-                routinesGenerated: routineCount
+                notificationsSent: notifResult.count,
+                repeatsGenerated: repeatResult.count,
+                routinesGenerated: routineResult.count
+            },
+            errors: {
+                notifications: notifResult.error,
+                repeats: repeatResult.error,
+                routines: routineResult.error
             }
         });
 
     } catch (error: any) {
-        console.error("Cron Run Error:", error);
+        console.error("Cron Run Fatal Error:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
