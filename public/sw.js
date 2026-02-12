@@ -1,21 +1,37 @@
 
+self.addEventListener('install', (event) => {
+    console.log('Service Worker installing.');
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+    console.log('Service Worker activating.');
+    event.waitUntil(clients.claim());
+});
+
 self.addEventListener('push', function (event) {
     if (event.data) {
-        const data = event.data.json();
-        const options = {
-            body: data.body,
-            icon: data.icon || '/icon-192x192.png',
-            badge: '/icon-192x192.png',
-            vibrate: [100, 50, 100],
-            data: {
-                dateOfArrival: Date.now(),
-                url: data.url || '/'
-            }
-        };
+        try {
+            const data = event.data.json();
+            const options = {
+                body: data.body,
+                icon: data.icon || '/icon-192x192.png',
+                badge: '/icon-192x192.png',
+                vibrate: [100, 50, 100],
+                data: {
+                    dateOfArrival: Date.now(),
+                    url: data.url || '/'
+                },
+                // iOS requires this for some background processing
+                requireInteraction: false
+            };
 
-        event.waitUntil(
-            self.registration.showNotification(data.title, options)
-        );
+            event.waitUntil(
+                self.registration.showNotification(data.title, options)
+            );
+        } catch (e) {
+            console.error('Push handling error:', e);
+        }
     }
 });
 
@@ -27,16 +43,14 @@ self.addEventListener('notificationclick', function (event) {
             includeUncontrolled: true
         })
             .then(function (clientList) {
-                if (clientList.length > 0) {
-                    let client = clientList[0];
-                    // Focus existing window
-                    for (let i = 0; i < clientList.length; i++) {
-                        if (clientList[i].focused) {
-                            return clientList[i].focus();
-                        }
+                // Focus existing window if available
+                for (let i = 0; i < clientList.length; i++) {
+                    const client = clientList[i];
+                    if (client.url && 'focus' in client) {
+                        return client.focus();
                     }
-                    return client.focus();
                 }
+                // Open new window
                 if (clients.openWindow && event.notification.data.url) {
                     return clients.openWindow(event.notification.data.url);
                 }

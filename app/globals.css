@@ -175,6 +175,15 @@ body {
   border: 1px solid var(--glass-border);
 }
 
+/* Fallback for devices without backdrop-filter support (older iOS, some Android) */
+@supports not (backdrop-filter: blur(16px)) {
+  .glass {
+    background: var(--card);
+    /* Solid or semi-opaque fallback */
+    opacity: 0.95;
+  }
+}
+
 .glass-subtle {
   background: var(--glass-bg);
   backdrop-filter: blur(8px) saturate(120%);

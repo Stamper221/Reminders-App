@@ -49,21 +49,32 @@ export function PushNotificationManager() {
     const syncSubscription = async () => {
         if (!user) return;
         try {
-            // Wait for SW to be ready
             if (!('serviceWorker' in navigator)) return;
             const reg = await navigator.serviceWorker.ready;
             const sub = await reg.pushManager.getSubscription();
+
             if (sub) {
                 // We have a subscription, make sure backend knows it
-                // Using JSON.stringify ensures we get keys properly
                 const subJson = sub.toJSON();
                 if (subJson.keys) {
                     await saveSubscription(sub);
                     console.log("Subscription synced");
                 }
+            } else {
+                // Permission granted but no subscription? Repair it.
+                console.log("Permission granted but no subscription found. Attempting silent re-subscribe.");
+                const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+                if (publicKey) {
+                    const newSub = await reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(publicKey)
+                    });
+                    await saveSubscription(newSub);
+                    console.log("Subscription repaired silently.");
+                }
             }
         } catch (e) {
-            console.error("Sync failed", e);
+            console.error("Sync/Repair failed", e);
         }
     };
 

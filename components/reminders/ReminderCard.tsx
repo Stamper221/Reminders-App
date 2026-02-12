@@ -120,7 +120,7 @@ export const ReminderCard = memo(function ReminderCard({ reminder, onEdit }: Rem
                             isOverdue ? "text-destructive font-medium" : "text-muted-foreground"
                         )}>
                             <Clock className="h-3 w-3" />
-                            {format(dueDate, "MMM d, h:mm a")}
+                            {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(dueDate)}
                         </span>
 
                         {/* Status pill */}

@@ -128,7 +128,7 @@ If deploying to Vercel, the `vercel.json` file handles the schedule.
 1.  Go to your Vercel Project Settings > Environment Variables.
 2.  Add a new variable:
     -   **Key**: `CRON_SECRET`
-    -   **Value**: (Generate a random string, e.g., `openssl rand -hex 32`)
+    -   **Value**: (Generate a random string. Run this in terminal: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
 
 ### GitHub Actions (Recommended for frequent updates)
 GitHub Actions can run as often as every 5 minutes for free.
