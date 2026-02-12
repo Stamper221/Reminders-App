@@ -71,6 +71,7 @@ export interface Routine {
     active: boolean;
     timezone: string; // IANA
     steps: RoutineStep[];
+    lastRun?: Timestamp; // Track last execution for daily checks
     schedule: {
         type: 'daily' | 'weekly' | 'custom';
         days?: number[]; // 0-6
