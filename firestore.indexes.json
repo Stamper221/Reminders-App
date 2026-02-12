@@ -16,14 +16,10 @@
         },
         {
             "collectionGroup": "reminders",
-            "queryScope": "COLLECTION",
+            "queryScope": "COLLECTION_GROUP",
             "fields": [
                 {
                     "fieldPath": "status",
-                    "order": "ASCENDING"
-                },
-                {
-                    "fieldPath": "due_at",
                     "order": "ASCENDING"
                 }
             ]
