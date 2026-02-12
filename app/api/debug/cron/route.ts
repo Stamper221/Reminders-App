@@ -60,8 +60,9 @@ export async function GET(request: NextRequest) {
             log(`Query success. Found ${snapshot.size} pending reminders.`);
         } catch (err: any) {
             log(`QUERY FAILED: ${err.message}`);
-            if (err.message.includes("indexes")) {
-                log("ACTION REQUIRED: Create the index using the link in the error above.");
+            log(`Full Error: ${JSON.stringify(err, Object.getOwnPropertyNames(err))}`);
+            if (err.message.includes("indexes") || err.code === 9) {
+                log("ACTION REQUIRED: Look for a URL in the error above and click it to create the index.");
             }
             return NextResponse.json({ success: false, logs }, { status: 500 });
         }
