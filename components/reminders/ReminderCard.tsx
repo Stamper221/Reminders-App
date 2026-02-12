@@ -8,7 +8,7 @@ import { format, isPast, isToday } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toggleReminderStatus, deleteReminder } from "@/lib/reminders";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface ReminderCardProps {
@@ -20,7 +20,7 @@ import { useSound } from "@/components/providers/SoundProvider";
 
 // ...
 
-export function ReminderCard({ reminder, onEdit }: ReminderCardProps) {
+export const ReminderCard = memo(function ReminderCard({ reminder, onEdit }: ReminderCardProps) {
     const [loading, setLoading] = useState(false);
     const [justCompleted, setJustCompleted] = useState(false);
     const { playSuccess } = useSound();
@@ -171,4 +171,4 @@ export function ReminderCard({ reminder, onEdit }: ReminderCardProps) {
             </CardContent>
         </Card>
     );
-}
+});

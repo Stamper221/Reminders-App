@@ -13,10 +13,11 @@ import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
-import { Loader2, Settings, Phone, MessageSquare, Globe, Wrench, Music, Headphones, VolumeX, Volume2, Bell, Mail, Clock, Briefcase } from "lucide-react";
+import { Loader2, Settings, Phone, MessageSquare, Globe, Wrench, Music, Headphones, VolumeX, Volume2, Bell, Mail, Palette } from "lucide-react";
 import { useSound } from "@/components/providers/SoundProvider";
 import { PushNotificationManager } from "./PushNotificationManager";
 import { ConnectedDevices } from "./ConnectedDevices";
+import { ThemeSelector } from "./ThemeSelector";
 
 const schema = z.object({
     phoneNumber: z.string().optional(),
@@ -211,6 +212,20 @@ export function SettingsSheet() {
                             />
                         </div>
                     </div>
+                    {/* Appearance Section */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                            <Palette className="h-3.5 w-3.5" />
+                            <span className="text-xs font-semibold uppercase tracking-wider">Appearance</span>
+                        </div>
+                        <div className="rounded-xl border bg-card p-4 space-y-3">
+                            <div>
+                                <span className="text-sm font-medium block">Theme</span>
+                                <span className="text-[11px] text-muted-foreground">Choose a color palette for the app</span>
+                            </div>
+                            <ThemeSelector />
+                        </div>
+                    </div>
 
                     {/* General Section */}
                     <div className="space-y-4">
@@ -234,238 +249,158 @@ export function SettingsSheet() {
                     </div>
                 </form>
 
-                {/* Developer Tools Section */}
-                <div className="space-y-4 pt-4 border-t border-border/50">
-                    <div className="flex items-center gap-2 text-muted-foreground">
+                {/* Developer Tools — collapsible accordion */}
+                <details className="group pt-4 border-t border-border/50">
+                    <summary className="flex items-center gap-2 text-muted-foreground cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
                         <Wrench className="h-3.5 w-3.5" />
                         <span className="text-xs font-semibold uppercase tracking-wider">Developer Tools</span>
-                    </div>
-
-                    {/* Test SMS */}
-                    <div className="rounded-xl border bg-card p-4">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                                <MessageSquare className="h-4 w-4 text-amber-500" />
+                        <svg className="ml-auto h-4 w-4 transition-transform duration-200 group-open:rotate-180" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+                    </summary>
+                    <div className="space-y-4 pt-4">
+                        {/* Test SMS */}
+                        <div className="rounded-xl border bg-card p-4">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                                    <MessageSquare className="h-4 w-4 text-amber-500" />
+                                </div>
+                                <div>
+                                    <span className="text-sm font-medium block">Test SMS</span>
+                                    <span className="text-[11px] text-muted-foreground">Send a test message to your phone</span>
+                                </div>
                             </div>
-                            <div>
-                                <span className="text-sm font-medium block">Test SMS</span>
-                                <span className="text-[11px] text-muted-foreground">Send a test message to your phone</span>
-                            </div>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                className="w-full cursor-pointer h-9"
+                                onClick={async (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    try {
+                                        if (!user) throw new Error("Not authenticated");
+                                        const token = await user.getIdToken();
+                                        toast.promise(
+                                            fetch("/api/test-sms", {
+                                                method: "POST",
+                                                headers: {
+                                                    "Content-Type": "application/json",
+                                                    "Authorization": `Bearer ${token}`,
+                                                },
+                                            }).then(async (res) => {
+                                                const data = await res.json();
+                                                if (!res.ok) throw new Error(data.error || "Failed to send");
+                                                return data;
+                                            }),
+                                            {
+                                                loading: 'Sending SMS...',
+                                                success: 'SMS sent!',
+                                                error: (err) => `Failed: ${err.message}`
+                                            }
+                                        );
+                                    } catch (err: any) {
+                                        toast.error(err.message);
+                                    }
+                                }}
+                            >
+                                Send SMS
+                            </Button>
                         </div>
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            className="w-full cursor-pointer h-9"
-                            onClick={async (e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                try {
-                                    if (!user) throw new Error("Not authenticated");
-                                    const token = await user.getIdToken();
-                                    toast.promise(
-                                        fetch("/api/test-sms", {
-                                            method: "POST",
-                                            headers: {
-                                                "Content-Type": "application/json",
-                                                "Authorization": `Bearer ${token}`,
-                                            },
-                                        }).then(async (res) => {
-                                            const data = await res.json();
-                                            if (!res.ok) throw new Error(data.error || "Failed to send");
-                                            return data;
-                                        }),
-                                        {
-                                            loading: 'Sending SMS...',
-                                            success: 'SMS sent!',
-                                            error: (err) => `Failed: ${err.message}`
-                                        }
-                                    );
-                                } catch (err: any) {
-                                    toast.error(err.message);
-                                }
-                            }}
-                        >
-                            Send SMS
-                        </Button>
-                    </div>
 
-                    {/* Test Email */}
-                    <div className="rounded-xl border bg-card p-4">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-                                <Mail className="h-4 w-4 text-blue-500" />
+                        {/* Test Email */}
+                        <div className="rounded-xl border bg-card p-4">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                                    <Mail className="h-4 w-4 text-blue-500" />
+                                </div>
+                                <div>
+                                    <span className="text-sm font-medium block">Test Email</span>
+                                    <span className="text-[11px] text-muted-foreground">Send a test email to your inbox</span>
+                                </div>
                             </div>
-                            <div>
-                                <span className="text-sm font-medium block">Test Email</span>
-                                <span className="text-[11px] text-muted-foreground">Send a test email to your inbox</span>
-                            </div>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                className="w-full cursor-pointer h-9"
+                                onClick={async (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    try {
+                                        if (!user) throw new Error("Not authenticated");
+                                        const token = await user.getIdToken();
+                                        toast.promise(
+                                            fetch("/api/test-email", {
+                                                method: "POST",
+                                                headers: {
+                                                    "Content-Type": "application/json",
+                                                    "Authorization": `Bearer ${token}`,
+                                                },
+                                            }).then(async (res) => {
+                                                const data = await res.json();
+                                                if (!res.ok) throw new Error(data.error || "Failed to send");
+                                                return data;
+                                            }),
+                                            {
+                                                loading: 'Sending Email...',
+                                                success: 'Email sent!',
+                                                error: (err) => `Failed: ${err.message}`
+                                            }
+                                        );
+                                    } catch (err: any) {
+                                        toast.error(err.message);
+                                    }
+                                }}
+                            >
+                                Send Email
+                            </Button>
                         </div>
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            className="w-full cursor-pointer h-9"
-                            onClick={async (e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                try {
-                                    if (!user) throw new Error("Not authenticated");
-                                    const token = await user.getIdToken();
-                                    toast.promise(
-                                        fetch("/api/test-email", {
-                                            method: "POST",
-                                            headers: {
-                                                "Content-Type": "application/json",
-                                                "Authorization": `Bearer ${token}`,
-                                            },
-                                        }).then(async (res) => {
-                                            const data = await res.json();
-                                            if (!res.ok) throw new Error(data.error || "Failed to send");
-                                            return data;
-                                        }),
-                                        {
-                                            loading: 'Sending Email...',
-                                            success: 'Email sent!',
-                                            error: (err) => `Failed: ${err.message}`
-                                        }
-                                    );
-                                } catch (err: any) {
-                                    toast.error(err.message);
-                                }
-                            }}
-                        >
-                            Send Email
-                        </Button>
-                    </div>
 
-                    {/* Test Push */}
-                    <div className="rounded-xl border bg-card p-4">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="h-9 w-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
-                                <Bell className="h-4 w-4 text-purple-500" />
+                        {/* Test Push */}
+                        <div className="rounded-xl border bg-card p-4">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="h-9 w-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+                                    <Bell className="h-4 w-4 text-purple-500" />
+                                </div>
+                                <div>
+                                    <span className="text-sm font-medium block">Test Push</span>
+                                    <span className="text-[11px] text-muted-foreground">Trigger a local browser notification</span>
+                                </div>
                             </div>
-                            <div>
-                                <span className="text-sm font-medium block">Test Push</span>
-                                <span className="text-[11px] text-muted-foreground">Trigger a local browser notification</span>
-                            </div>
-                        </div>
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            className="w-full cursor-pointer h-9"
-                            onClick={async (e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                if (!('Notification' in window)) {
-                                    toast.error('Browser does not support notifications');
-                                    return;
-                                }
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                className="w-full cursor-pointer h-9"
+                                onClick={async (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (!('Notification' in window)) {
+                                        toast.error('Browser does not support notifications');
+                                        return;
+                                    }
 
-                                if (Notification.permission === 'granted') {
-                                    new Notification('Test Notification 🔔', {
-                                        body: 'Your push notifications are working correctly!',
-                                        icon: '/icon-192x192.png'
-                                    });
-                                    toast.success('Notification triggered');
-                                } else {
-                                    const permission = await Notification.requestPermission();
-                                    if (permission === 'granted') {
+                                    if (Notification.permission === 'granted') {
                                         new Notification('Test Notification 🔔', {
                                             body: 'Your push notifications are working correctly!',
                                             icon: '/icon-192x192.png'
                                         });
                                         toast.success('Notification triggered');
                                     } else {
-                                        toast.error('Permission denied');
+                                        const permission = await Notification.requestPermission();
+                                        if (permission === 'granted') {
+                                            new Notification('Test Notification 🔔', {
+                                                body: 'Your push notifications are working correctly!',
+                                                icon: '/icon-192x192.png'
+                                            });
+                                            toast.success('Notification triggered');
+                                        } else {
+                                            toast.error('Permission denied');
+                                        }
                                     }
-                                }
-                            }}
-                        >
-                            Trigger Push
-                        </Button>
-                    </div>
-
-                    {/* Trigger Repeats (Debug) */}
-                    <div className="rounded-xl border bg-card p-4">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
-                                <Clock className="h-4 w-4 text-green-500" />
-                            </div>
-                            <div>
-                                <span className="text-sm font-medium block">Trigger Repeats</span>
-                                <span className="text-[11px] text-muted-foreground">Force check for recurring reminders</span>
-                            </div>
+                                }}
+                            >
+                                Trigger Push
+                            </Button>
                         </div>
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            className="w-full cursor-pointer h-9"
-                            onClick={async (e) => {
-                                e.preventDefault();
-                                try {
-                                    if (!user) return;
-                                    const token = await user.getIdToken();
-                                    toast.promise(
-                                        fetch("/api/cron/process-repeats", {
-                                            headers: { Authorization: `Bearer ${token}` }
-                                        }).then(async res => {
-                                            const data = await res.json();
-                                            if (!res.ok) throw new Error(data.error);
-                                            return data;
-                                        }),
-                                        {
-                                            loading: "Processing...",
-                                            success: (data) => `Generated ${data.generated} instances`,
-                                            error: "Failed to process"
-                                        }
-                                    );
-                                } catch (err) { toast.error("Error"); }
-                            }}
-                        >
-                            Run Repeats Job
-                        </Button>
                     </div>
-
-                    {/* Trigger Routines (Debug) */}
-                    <div className="rounded-xl border bg-card p-4">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="h-9 w-9 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
-                                <Briefcase className="h-4 w-4 text-orange-500" />
-                            </div>
-                            <div>
-                                <span className="text-sm font-medium block">Trigger Routines</span>
-                                <span className="text-[11px] text-muted-foreground">Force check for active routines</span>
-                            </div>
-                        </div>
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            className="w-full cursor-pointer h-9"
-                            onClick={async (e) => {
-                                e.preventDefault();
-                                try {
-                                    if (!user) return;
-                                    const token = await user.getIdToken();
-                                    toast.promise(
-                                        fetch("/api/cron/process-routines", {
-                                            headers: { Authorization: `Bearer ${token}` }
-                                        }).then(async res => {
-                                            const data = await res.json();
-                                            if (!res.ok) throw new Error(data.error);
-                                            return data;
-                                        }),
-                                        {
-                                            loading: "Processing...",
-                                            success: (data) => `Generated ${data.generated} instances`,
-                                            error: "Failed to process"
-                                        }
-                                    );
-                                } catch (err) { toast.error("Error"); }
-                            }}
-                        >
-                            Run Routines Job
-                        </Button>
-                    </div>
-                </div>
+                </details>
 
                 <SheetFooter className="mt-6">
                     <Button type="submit" form="settings-form" disabled={loading} className="w-full sm:w-auto">

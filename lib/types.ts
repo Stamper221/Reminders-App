@@ -6,6 +6,8 @@ export interface UserProfile {
     phoneNumber?: string;
     smsOptIn: boolean;
     timezone: string;
+    theme?: string;
+    sidebarCollapsed?: boolean;
     createdAt: Timestamp;
     updatedAt: Timestamp;
 }

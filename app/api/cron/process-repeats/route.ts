@@ -31,7 +31,6 @@ const db = getFirestore();
 
 export async function GET(request: NextRequest) {
     // secure the endpoint
-    // secure the endpoint
     const authHeader = request.headers.get("authorization");
     let isAuthorized = false;
 
@@ -60,61 +59,62 @@ export async function GET(request: NextRequest) {
         const futureWindow = new Date();
         futureWindow.setDate(futureWindow.getDate() + windowDays);
 
-        // Find reminders that are waiting to generate their next instance
-        // We assume 'generationStatus' == 'pending' implies it has a repeatRule
-        const remindersRef = db.collectionGroup("reminders");
-        const snapshot = await remindersRef.where("generationStatus", "==", "pending").get();
-
-        if (snapshot.empty) {
-            return NextResponse.json({ message: "No pending repeats." });
-        }
-
+        // Iterate all users and query their reminders subcollection
+        // This avoids collectionGroup which requires a composite index
+        const usersSnapshot = await db.collection("users").get();
         let generatedCount = 0;
         const batch = db.batch();
 
-        for (const doc of snapshot.docs) {
-            const reminder = doc.data() as Reminder;
-            // Double check repeatRule
-            if (!reminder.repeatRule) continue;
+        for (const userDoc of usersSnapshot.docs) {
+            const remindersRef = db.collection(`users/${userDoc.id}/reminders`);
+            const snapshot = await remindersRef.where("generationStatus", "==", "pending").get();
 
-            const currentDue = reminder.due_at; // Timestamp
-            // Calculate next
-            const nextDueParam = calculateNextDue(reminder.repeatRule, currentDue);
+            if (snapshot.empty) continue;
 
-            // If nextDue is null (ended) or strictly after futureWindow, skip
-            if (!nextDueParam) {
-                // End of series? Mark as created (or 'ended') to stop checking
-                batch.update(doc.ref, { generationStatus: 'created' }); // effectively 'done'
-                continue;
-            }
+            for (const doc of snapshot.docs) {
+                const reminder = doc.data() as Reminder;
+                // Double check repeatRule
+                if (!reminder.repeatRule) continue;
 
-            const nextDueDate = nextDueParam.toDate();
-            if (nextDueDate <= futureWindow) {
-                // Create next instance
-                const newRef = db.collection(`users/${reminder.uid}/reminders`).doc();
-                const now = Timestamp.now();
+                const currentDue = reminder.due_at; // Timestamp
+                // Calculate next
+                const nextDueParam = calculateNextDue(reminder.repeatRule, currentDue);
 
-                const nextReminder: any = {
-                    ...reminder,
-                    id: newRef.id,
-                    due_at: nextDueParam,
-                    status: 'pending',
-                    notifications: reminder.notifications.map(n => ({ ...n, sent: false })),
-                    originId: doc.id,
-                    rootId: reminder.rootId || doc.id,
-                    generationStatus: 'pending',
-                    created_at: now,
-                    updated_at: now,
-                };
+                // If nextDue is null (ended) or strictly after futureWindow, skip
+                if (!nextDueParam) {
+                    // End of series? Mark as created (or 'ended') to stop checking
+                    batch.update(doc.ref, { generationStatus: 'created' }); // effectively 'done'
+                    continue;
+                }
 
-                // Remove ID from data if Reminder interface includes it optionally but firebase doesn't store it
-                delete (nextReminder as any).id;
+                const nextDueDate = nextDueParam.toDate();
+                if (nextDueDate <= futureWindow) {
+                    // Create next instance
+                    const newRef = db.collection(`users/${reminder.uid}/reminders`).doc();
+                    const now = Timestamp.now();
 
-                batch.set(newRef, nextReminder);
+                    const nextReminder: any = {
+                        ...reminder,
+                        id: newRef.id,
+                        due_at: nextDueParam,
+                        status: 'pending',
+                        notifications: reminder.notifications.map(n => ({ ...n, sent: false })),
+                        originId: doc.id,
+                        rootId: reminder.rootId || doc.id,
+                        generationStatus: 'pending',
+                        created_at: now,
+                        updated_at: now,
+                    };
 
-                // Mark current as processed
-                batch.update(doc.ref, { generationStatus: 'created' });
-                generatedCount++;
+                    // Remove ID from data if Reminder interface includes it optionally but firebase doesn't store it
+                    delete (nextReminder as any).id;
+
+                    batch.set(newRef, nextReminder);
+
+                    // Mark current as processed
+                    batch.update(doc.ref, { generationStatus: 'created' });
+                    generatedCount++;
+                }
             }
         }
 

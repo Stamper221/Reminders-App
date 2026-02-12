@@ -113,4 +113,25 @@ To make your app accessible from your phone without your computer running:
 -   **Hydration Mismatch**: If you see errors about "server rendered HTML didn't match", it's usually benign in dev mode, often caused by extensions modifying the DOM. 
     -   Check the terminal where `npm run serve` is running.
     -   Ensure your Twilio trial account has verified the "To" phone number (Twilio trial only sends to verified numbers).
-    -   Check that you enabled "SMS Opt-in" in the App Settings (Sidebar > Settings).
+-   Check that you enabled "SMS Opt-in" in the App Settings (Sidebar > Settings).
+
+---
+
+## Step 6: Setup Recurring Reminders (Cron)
+
+To ensure recurring reminders generate automatically, you need to set up the Cron job.
+
+### Vercel Cron (Recommended)
+If deploying to Vercel, the `vercel.json` file handles the schedule automatically. You just need to set the secret:
+1.  Go to your Vercel Project Settings > Environment Variables.
+2.  Add a new variable:
+    -   **Key**: `CRON_SECRET`
+    -   **Value**: (Generate a random string, e.g., `openssl rand -hex 32`)
+
+### GitHub Actions (Alternative)
+If you prefer to use GitHub Actions to trigger the cron:
+1.  Go to your GitHub Repository > Settings > Secrets and variables > Actions.
+2.  Add the following secrets:
+    -   `CRON_SECRET`: The same random string you generated.
+    -   `APP_URL`: Your deployed URL (e.g., `https://your-app.vercel.app`).
+

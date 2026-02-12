@@ -2,7 +2,7 @@ name: Reminders Cron
 
 on:
   schedule:
-    # Run every 5 minutes (fastest allowed by GitHub Actions generally)
+    # Run every 5 minutes
     - cron: '*/5 * * * *'
   workflow_dispatch: # Allow manual trigger
 
@@ -10,16 +10,36 @@ jobs:
   trigger-crons:
     runs-on: ubuntu-latest
     steps:
-      - name: Check Reminders (Every 5 mins)
+      - name: Validate secrets
+        id: validate
         run: |
-          curl -L -X GET "${{ secrets.APP_URL }}/api/cron/check-reminders" \
-          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          if [ -z "${{ secrets.APP_URL }}" ] || [ -z "${{ secrets.CRON_SECRET }}" ]; then
+            echo "::error::APP_URL or CRON_SECRET is not set. Please configure GitHub repository secrets."
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check Reminders
+        if: steps.validate.outputs.valid == 'true'
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L -X GET \
+            "${{ secrets.APP_URL }}/api/cron/check-reminders" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "check-reminders returned HTTP $STATUS"
+          if [ "$STATUS" -ge 400 ]; then
+            echo "::warning::check-reminders returned $STATUS"
+          fi
 
       - name: Process Repeats & Routines (Hourly)
-        if: endsWith(github.event.schedule, '0 * * * *') || github.event_name == 'workflow_dispatch'
+        if: steps.validate.outputs.valid == 'true' && (endsWith(github.event.schedule, '0 * * * *') || github.event_name == 'workflow_dispatch')
         run: |
-          curl -L -X GET "${{ secrets.APP_URL }}/api/cron/process-repeats" \
-          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
-          
-          curl -L -X GET "${{ secrets.APP_URL }}/api/cron/process-routines" \
-          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L -X GET \
+            "${{ secrets.APP_URL }}/api/cron/process-repeats" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "process-repeats returned HTTP $STATUS"
+
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L -X GET \
+            "${{ secrets.APP_URL }}/api/cron/process-routines" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "process-routines returned HTTP $STATUS"

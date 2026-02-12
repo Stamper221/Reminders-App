@@ -4,6 +4,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getApps, initializeApp, cert } from "firebase-admin/app";
 import nodemailer from "nodemailer";
 import webpush from "web-push";
+import { formatInTimeZone } from "date-fns-tz";
 
 // Initialize Firebase Admin
 if (getApps().length === 0) {
@@ -107,9 +108,8 @@ export async function POST(request: NextRequest) {
                 });
 
                 const dueAt = reminder?.due_at?.toDate ? reminder.due_at.toDate() : new Date(reminder?.due_at);
-                const dateStr = dueAt.toLocaleString("en-US", {
-                    weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
-                });
+                const userTimezone = reminder?.timezone || userData?.timezone || 'UTC';
+                const dateStr = formatInTimeZone(dueAt, userTimezone, "EEE, MMM d, h:mm a");
 
                 await transporter.sendMail({
                     from: `"Reminders App" <${smtpFrom}>`,
@@ -134,10 +134,13 @@ export async function POST(request: NextRequest) {
             const snapshot = await subsRef.get();
 
             if (!snapshot.empty) {
+                const dueAtPush = reminder?.due_at?.toDate ? reminder.due_at.toDate() : new Date(reminder?.due_at);
+                const pushTimezone = reminder?.timezone || userData?.timezone || 'UTC';
+                const pushTimeStr = formatInTimeZone(dueAtPush, pushTimezone, "h:mm a");
                 const payload = JSON.stringify({
                     title: `Reminder: ${reminder?.title}`,
-                    body: reminder?.notes || `Due: ${new Date(reminder?.due_at?.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-                    url: `/?reminderId=${reminderId}`, // Deep link to dashboard
+                    body: reminder?.notes || `Due: ${pushTimeStr}`,
+                    url: `/?reminderId=${reminderId}`,
                     icon: "/icon-192x192.png"
                 });
 

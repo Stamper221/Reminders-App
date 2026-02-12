@@ -16,7 +16,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Settings2 } from "lucide-react";
 import { format } from "date-fns";
 import { Timestamp } from "firebase/firestore";
 
@@ -36,15 +36,29 @@ const WEEKDAYS = [
 ];
 
 export function RepeatRuleSelector({ value, onChange }: RepeatRuleSelectorProps) {
-    const [open, setOpen] = React.useState(false);
+    const [customOpen, setCustomOpen] = React.useState(false);
 
-    const getPresetValue = () => {
+    // Determine if current value matches a preset, or is custom
+    const getPresetValue = (): string => {
         if (!value) return "none";
-        if (value.frequency === 'hourly' && value.interval === 1) return "hourly";
-        if (value.frequency === 'daily' && value.interval === 1) return "daily";
-        if (value.frequency === 'weekly' && value.interval === 1 && (!value.weekdays || value.weekdays.length === 0)) return "weekly";
-        if (value.frequency === 'monthly' && value.interval === 1) return "monthly";
-        if (value.frequency === 'weekly' && value.weekdays?.length === 5 && !value.weekdays.includes(0) && !value.weekdays.includes(6)) return "weekdays";
+        const { frequency, interval, weekdays, skipWeekends } = value;
+
+        if (frequency === 'hourly' && interval === 1) return "hourly";
+        if (frequency === 'daily' && interval === 1) return "daily";
+        if (frequency === 'weekly' && interval === 1 && (!weekdays || weekdays.length === 0)) return "weekly";
+        if (frequency === 'monthly' && interval === 1) return "monthly";
+
+        // Weekdays preset: weekly, interval 1, exactly Mon-Fri
+        if (
+            frequency === 'weekly' &&
+            interval === 1 &&
+            weekdays?.length === 5 &&
+            [1, 2, 3, 4, 5].every(d => weekdays.includes(d))
+        ) {
+            return "weekdays";
+        }
+
+        // Anything else is custom
         return "custom";
     };
 
@@ -64,30 +78,45 @@ export function RepeatRuleSelector({ value, onChange }: RepeatRuleSelectorProps)
         } else if (preset === "weekdays") {
             onChange({ frequency: 'weekly', interval: 1, weekdays: [1, 2, 3, 4, 5], skipWeekends: true });
         } else if (preset === "custom") {
-            setOpen(true);
+            // Open the custom editor. Keep the existing rule if it exists,
+            // otherwise start with a sensible default that WON'T match any preset.
+            setCustomOpen(true);
             if (!value) {
-                onChange({ frequency: 'daily', interval: 1 });
+                onChange({ frequency: 'daily', interval: 2 });
             }
         }
     };
 
     const updateRule = (updates: Partial<RepeatRule>) => {
-        if (!value) return;
-        onChange({ ...value, ...updates });
+        const current = value || { frequency: 'daily' as const, interval: 1 };
+        onChange({ ...current, ...updates });
     };
 
     const toggleWeekday = (day: number) => {
-        if (!value) return;
-        const currentDays = value.weekdays || [];
+        const current = value || { frequency: 'weekly' as const, interval: 1 };
+        const currentDays = current.weekdays || [];
         const newDays = currentDays.includes(day)
             ? currentDays.filter(d => d !== day)
             : [...currentDays, day].sort();
 
+        // Use 'weekly' frequency with specific weekdays — NOT 'custom'
         onChange({
-            ...value,
-            frequency: 'custom',
-            weekdays: newDays
+            ...current,
+            frequency: 'weekly',
+            weekdays: newDays,
         });
+    };
+
+    // Get the underlying frequency for the custom panel select.
+    // If frequency is 'custom', map it to the appropriate underlying type.
+    const getCustomFrequency = (): string => {
+        if (!value) return 'daily';
+        if (value.frequency === 'custom') {
+            // If it has weekdays, treat as weekly
+            if (value.weekdays && value.weekdays.length > 0) return 'weekly';
+            return 'daily';
+        }
+        return value.frequency;
     };
 
     const getFrequencyLabel = (freq: string, interval: number) => {
@@ -97,15 +126,18 @@ export function RepeatRuleSelector({ value, onChange }: RepeatRuleSelectorProps)
             case 'daily': return plural ? 'days' : 'day';
             case 'weekly': return plural ? 'weeks' : 'week';
             case 'monthly': return plural ? 'months' : 'month';
+            case 'custom': return plural ? 'days' : 'day';
             default: return plural ? 'days' : 'day';
         }
     };
+
+    const presetValue = getPresetValue();
 
     return (
         <div className="space-y-2">
             <Label>Repeat</Label>
             <div className="flex gap-2">
-                <Select value={getPresetValue()} onValueChange={handlePresetChange}>
+                <Select value={presetValue} onValueChange={handlePresetChange}>
                     <SelectTrigger className="w-full">
                         <SelectValue placeholder="Does not repeat" />
                     </SelectTrigger>
@@ -120,11 +152,11 @@ export function RepeatRuleSelector({ value, onChange }: RepeatRuleSelectorProps)
                     </SelectContent>
                 </Select>
 
-                {getPresetValue() === "custom" && (
-                    <Popover open={open} onOpenChange={setOpen}>
+                {presetValue === "custom" && (
+                    <Popover open={customOpen} onOpenChange={setCustomOpen}>
                         <PopoverTrigger asChild>
-                            <Button variant="outline" size="icon">
-                                <CalendarIcon className="w-4 h-4" />
+                            <Button variant="outline" size="icon" title="Edit custom repeat">
+                                <Settings2 className="w-4 h-4" />
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-80 p-4 space-y-4" align="end">
@@ -142,7 +174,7 @@ export function RepeatRuleSelector({ value, onChange }: RepeatRuleSelectorProps)
                                         onChange={(e) => updateRule({ interval: parseInt(e.target.value) || 1 })}
                                     />
                                     <Select
-                                        value={value?.frequency === 'custom' ? 'daily' : (value?.frequency || 'daily')}
+                                        value={getCustomFrequency()}
                                         onValueChange={(val: any) => updateRule({ frequency: val })}
                                     >
                                         <SelectTrigger className="w-28">
@@ -158,7 +190,7 @@ export function RepeatRuleSelector({ value, onChange }: RepeatRuleSelectorProps)
                                 </div>
                             </div>
 
-                            {(value?.frequency === 'weekly' || value?.frequency === 'custom') && (
+                            {(getCustomFrequency() === 'weekly') && (
                                 <div className="space-y-2">
                                     <Label>On these days</Label>
                                     <div className="flex justify-between">
@@ -233,6 +265,15 @@ export function RepeatRuleSelector({ value, onChange }: RepeatRuleSelectorProps)
                                     </div>
                                 )}
                             </div>
+
+                            <Button
+                                variant="default"
+                                className="w-full"
+                                size="sm"
+                                onClick={() => setCustomOpen(false)}
+                            >
+                                Done
+                            </Button>
                         </PopoverContent>
                     </Popover>
                 )}
@@ -240,7 +281,7 @@ export function RepeatRuleSelector({ value, onChange }: RepeatRuleSelectorProps)
             {value && (
                 <div className="text-xs text-muted-foreground mt-1">
                     Repeats every {value.interval > 1 ? `${value.interval} ` : ""}{getFrequencyLabel(value.frequency, value.interval)}
-                    {value.weekdays?.length ? ` on ${value.weekdays.length} days` : ""}
+                    {value.weekdays?.length ? ` on ${value.weekdays.map(d => WEEKDAYS[d].label).join(', ')}` : ""}
                     {value.endCondition?.type === 'date' && value.endCondition.untilDate ? ` until ${format(value.endCondition.untilDate.toDate(), 'PP')}` : ""}
                     {value.endCondition?.type === 'count' ? ` for ${value.endCondition.count} times` : ""}
                 </div>

@@ -162,7 +162,7 @@ export function ReminderList({ filter }: ReminderListProps) {
                     >
                         <ReminderCard
                             reminder={reminder}
-                            onEdit={(r) => openEdit(r)}
+                            onEdit={openEdit}
                         />
                     </motion.div>
                 ))}
