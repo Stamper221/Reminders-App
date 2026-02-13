@@ -30,6 +30,16 @@ export function PushNotificationManager() {
             if (perm === "granted") {
                 syncSubscription();
             }
+
+            // Re-sync on visibility change (in case token rotated while backgrounded)
+            const handleVisibilityChange = () => {
+                if (document.visibilityState === 'visible' && Notification.permission === "granted") {
+                    console.log("App visible, verifying push subscription...");
+                    syncSubscription();
+                }
+            };
+            document.addEventListener("visibilitychange", handleVisibilityChange);
+            return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
         }
     }, [user]);
 

@@ -57,3 +57,33 @@ self.addEventListener('notificationclick', function (event) {
             })
     );
 });
+// Handle Push Subscription Rotation (Background)
+self.addEventListener('pushsubscriptionchange', function (event) {
+    console.log('[SW] Push Subscription Change detected');
+
+    event.waitUntil(
+        self.registration.pushManager.getSubscription()
+            .then(function (oldSubscription) {
+                // Re-subscribe
+                // Note: We need the VAPID key here? 
+                // We can retrieve options from the old subscription if available, or we hardcode?
+                // "getSubscription().options" isn't fully reliable.
+                // But usually we can just call subscribe again.
+
+                return self.registration.pushManager.subscribe(event.oldSubscription ? event.oldSubscription.options : { userVisibleOnly: true })
+                    .then(function (newSubscription) {
+                        console.log('[SW] Renewed Subscription:', newSubscription.endpoint);
+
+                        // Sync to server
+                        return fetch('/api/push/update-token', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                oldEndpoint: event.oldSubscription ? event.oldSubscription.endpoint : (oldSubscription ? oldSubscription.endpoint : null),
+                                newSubscription: newSubscription
+                            })
+                        });
+                    });
+            })
+    );
+});
