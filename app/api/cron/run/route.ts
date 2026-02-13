@@ -57,8 +57,18 @@ if (smtpUser && smtpPass) {
 // Helper: Process Reminders (Notifications)
 async function processReminders(now: Date) {
     const remindersRef = db.collectionGroup("reminders");
-    // Only pending reminders
-    const snapshot = await remindersRef.where("status", "==", "pending").get();
+
+    // Optimization: Only check reminders within a relevant time window to save Read Quotas.
+    // Window: 7 days ago (to catch late/overdue) to 26 hours ahead (max offset 24h + buffer).
+    // This requires a Composite Index: status + due_at on Collection Group.
+    const startWindow = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // -7 Days
+    const endWindow = new Date(now.getTime() + 26 * 60 * 60 * 1000); // +26 Hours
+
+    const snapshot = await remindersRef
+        .where("status", "==", "pending")
+        .where("due_at", ">=", startWindow)
+        .where("due_at", "<=", endWindow)
+        .get();
 
     if (snapshot.empty) return 0;
 
