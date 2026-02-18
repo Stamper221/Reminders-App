@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { ReminderModalProvider } from "@/components/providers/ReminderModalProvider";
+import { ReminderProvider } from "@/components/providers/ReminderProvider";
 import { ReminderSheet } from "@/components/reminders/ReminderSheet";
 import { SettingsModalProvider } from "@/components/providers/SettingsModalProvider";
 import { SettingsSheet } from "@/components/settings/SettingsSheet";
@@ -63,19 +64,21 @@ export default function MainLayout({
             <ThemeProvider>
                 <SidebarProvider>
                     <ReminderModalProvider>
-                        <StarField />
-                        <div className="flex min-h-screen relative" style={{ zIndex: 1 }}>
-                            <Sidebar />
-                            <main className="flex-1 overflow-y-auto h-screen pb-24 md:pb-8">
-                                <div className="p-5 md:p-8 max-w-5xl mx-auto">
-                                    {children}
-                                </div>
-                            </main>
-                            <MobileNav />
-                            <ReminderSheet />
-                            <SettingsSheet />
-                            <InAppNotifier />
-                        </div>
+                        <ReminderProvider>
+                            <StarField />
+                            <div className="flex min-h-screen relative" style={{ zIndex: 1 }}>
+                                <Sidebar />
+                                <main className="flex-1 overflow-y-auto h-screen pb-24 md:pb-8">
+                                    <div className="p-5 md:p-8 max-w-5xl mx-auto">
+                                        {children}
+                                    </div>
+                                </main>
+                                <MobileNav />
+                                <ReminderSheet />
+                                <SettingsSheet />
+                                <InAppNotifier />
+                            </div>
+                        </ReminderProvider>
                     </ReminderModalProvider>
                 </SidebarProvider>
             </ThemeProvider>

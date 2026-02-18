@@ -5,35 +5,24 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { db } from "@/lib/firebase/client";
+import { useReminders } from "@/components/providers/ReminderProvider";
 import { Reminder } from "@/lib/types";
-import { collection, onSnapshot, query } from "firebase/firestore";
-import { useEffect, useState } from "react";
 import { useReminderModal } from "@/components/providers/ReminderModalProvider";
 import { updateReminder } from "@/lib/reminders";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useMemo } from "react";
 
 export function CalendarWrapper() {
     const { user } = useAuth();
     const { openEdit, openNew } = useReminderModal();
-    const [reminders, setReminders] = useState<Reminder[]>([]);
-    const [loading, setLoading] = useState(true);
+    // Use shared data from the centralized provider — NO separate listener
+    const { reminders: activeReminders, completedReminders, loading } = useReminders();
 
-    useEffect(() => {
-        if (!user) return;
-
-        const remindersRef = collection(db, "users", user.uid, "reminders");
-        const q = query(remindersRef);
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reminder));
-            setReminders(items);
-            setLoading(false);
-        });
-
-        return () => unsubscribe();
-    }, [user]);
+    // Merge active + completed for calendar display
+    const allReminders = useMemo(() => {
+        return [...activeReminders, ...completedReminders];
+    }, [activeReminders, completedReminders]);
 
     const handleEventDrop = async (info: any) => {
         if (!user) return;
@@ -53,7 +42,7 @@ export function CalendarWrapper() {
     };
 
     const handleEventClick = (info: any) => {
-        const reminder = reminders.find(r => r.id === info.event.id);
+        const reminder = allReminders.find(r => r.id === info.event.id);
         if (reminder) {
             openEdit(reminder);
         }
@@ -68,14 +57,16 @@ export function CalendarWrapper() {
         return new Date(ts);
     };
 
-    const events = reminders.map(r => ({
-        id: r.id,
-        title: r.title,
-        start: safeToDate(r.due_at),
-        backgroundColor: r.status === 'done' ? '#10b981' : 'var(--primary)',
-        borderColor: r.status === 'done' ? '#10b981' : 'var(--primary)',
-        classNames: r.status === 'done' ? ['opacity-50'] : [],
-    }));
+    const events = useMemo(() => {
+        return allReminders.map(r => ({
+            id: r.id,
+            title: r.title,
+            start: safeToDate(r.due_at),
+            backgroundColor: r.status === 'done' ? '#10b981' : 'var(--primary)',
+            borderColor: r.status === 'done' ? '#10b981' : 'var(--primary)',
+            classNames: r.status === 'done' ? ['opacity-50'] : [],
+        }));
+    }, [allReminders]);
 
     if (loading) {
         return (

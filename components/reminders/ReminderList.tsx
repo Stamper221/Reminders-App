@@ -1,12 +1,11 @@
 "use client";
 
 import { useAuth } from "@/components/providers/AuthProvider";
-import { db } from "@/lib/firebase/client";
+import { useReminders } from "@/components/providers/ReminderProvider";
 import { Reminder } from "@/lib/types";
-import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { ReminderCard } from "./ReminderCard";
-import { CalendarOff } from "lucide-react";
+import { CalendarOff, Loader2 } from "lucide-react";
 import { useReminderModal } from "@/components/providers/ReminderModalProvider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AnimatePresence, motion } from "framer-motion";
@@ -34,95 +33,47 @@ function ReminderListSkeleton() {
 export function ReminderList({ filter }: ReminderListProps) {
     const { user } = useAuth();
     const { openEdit } = useReminderModal();
-    const [reminders, setReminders] = useState<Reminder[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const {
+        todayReminders,
+        upcomingReminders,
+        allActiveReminders,
+        completedReminders,
+        loading,
+        loadingCompleted,
+        hasMoreCompleted,
+        loadMoreCompleted,
+    } = useReminders();
 
+    // Load completed on first render of completed tab
+    const [completedInitialized, setCompletedInitialized] = useState(false);
     useEffect(() => {
-        if (!user) return;
+        if (filter === "completed" && !completedInitialized) {
+            setCompletedInitialized(true);
+            loadMoreCompleted();
+        }
+    }, [filter, completedInitialized, loadMoreCompleted]);
 
-        const remindersRef = collection(db, "users", user.uid, "reminders");
+    // Select the right dataset based on filter — NO Firestore reads here!
+    let reminders: Reminder[];
+    let isLoading: boolean;
 
-        // Build the query — use simple queries that don't require composite indexes
-        // as a fallback. All filtering is done client-side which is fine for personal data.
-        const q = query(remindersRef, orderBy("due_at", "asc"));
-
-        const unsubscribe = onSnapshot(
-            q,
-            (snapshot) => {
-                setError(null);
-                const items = snapshot.docs.map(doc => {
-                    const data = doc.data() as any;
-                    if (!data.notifications) {
-                        data.notifications = [];
-                    }
-                    return { id: doc.id, ...data } as Reminder;
-                });
-
-                // Client-side filtering — avoids needing composite indexes entirely
-                let filtered = items;
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const tomorrow = new Date(today);
-                tomorrow.setDate(tomorrow.getDate() + 1);
-
-                if (filter === "completed") {
-                    filtered = items
-                        .filter(r => r.status === "done")
-                        .sort((a, b) => b.due_at.toDate().getTime() - a.due_at.toDate().getTime());
-                } else if (filter === "today") {
-                    filtered = items.filter(r => {
-                        if (r.status === "done") return false;
-                        const d = r.due_at.toDate();
-                        return d >= today && d < tomorrow;
-                    });
-                } else if (filter === "upcoming") {
-                    filtered = items.filter(r => {
-                        if (r.status === "done") return false;
-                        const d = r.due_at.toDate();
-                        return d >= tomorrow;
-                    });
-                }
-
-                setReminders(filtered);
-                setLoading(false);
-            },
-            (err) => {
-                // Error handler — if the query fails (e.g. missing index),
-                // stop loading and show empty state instead of infinite skeleton
-                console.error("Firestore snapshot error:", err);
-                setError(err.message);
-                setReminders([]);
-                setLoading(false);
-            }
-        );
-
-        return () => unsubscribe();
-    }, [user, filter]);
-
-    if (loading) {
-        return <ReminderListSkeleton />;
+    if (filter === "completed") {
+        reminders = completedReminders;
+        isLoading = completedReminders.length === 0 && loadingCompleted;
+    } else if (filter === "today") {
+        reminders = todayReminders;
+        isLoading = loading;
+    } else if (filter === "upcoming") {
+        reminders = upcomingReminders;
+        isLoading = loading;
+    } else {
+        // "all" — show all active reminders
+        reminders = allActiveReminders;
+        isLoading = loading;
     }
 
-    if (error) {
-        return (
-            <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-                className="text-center py-16 text-muted-foreground"
-            >
-                <div className="flex justify-center mb-4">
-                    <div className="h-16 w-16 rounded-2xl bg-destructive/10 flex items-center justify-center">
-                        <CalendarOff className="h-8 w-8 text-destructive opacity-50" />
-                    </div>
-                </div>
-                <p className="text-base font-medium text-destructive">Something went wrong</p>
-                <p className="text-sm mt-1 opacity-70 max-w-md mx-auto">
-                    Could not load reminders. Try refreshing.
-                </p>
-            </motion.div>
-        );
+    if (isLoading) {
+        return <ReminderListSkeleton />;
     }
 
     if (reminders.length === 0) {
@@ -167,6 +118,26 @@ export function ReminderList({ filter }: ReminderListProps) {
                     </motion.div>
                 ))}
             </AnimatePresence>
+
+            {/* Pagination for completed tab */}
+            {filter === "completed" && hasMoreCompleted && (
+                <div className="flex justify-center pt-4">
+                    <button
+                        onClick={loadMoreCompleted}
+                        disabled={loadingCompleted}
+                        className="text-sm text-primary hover:underline disabled:opacity-50 flex items-center gap-2"
+                    >
+                        {loadingCompleted ? (
+                            <>
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Loading...
+                            </>
+                        ) : (
+                            "Load more"
+                        )}
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

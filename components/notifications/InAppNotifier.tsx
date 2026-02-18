@@ -1,52 +1,27 @@
 "use client";
 
 import { useAuth } from "@/components/providers/AuthProvider";
-import { db } from "@/lib/firebase/client";
-import { Reminder } from "@/lib/types";
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
-import { useEffect, useRef, useState } from "react";
+import { useReminders } from "@/components/providers/ReminderProvider";
+import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { Bell } from "lucide-react";
 
 /**
- * InAppNotifier — polls pending reminders and fires toast notifications
- * when a reminder's trigger time (due_at - offset) is reached.
+ * InAppNotifier — checks pending reminders from the shared ReminderProvider
+ * and fires toast notifications when a reminder's trigger time is reached.
  * Only fires once per notification (tracked in a Set).
+ * 
+ * IMPORTANT: This component no longer creates its own Firestore listener.
+ * It consumes data from the centralized ReminderProvider.
  */
 import { useSound } from "@/components/providers/SoundProvider";
-
-// ...
 
 export function InAppNotifier() {
     const { user } = useAuth();
     const { playNotification } = useSound();
     const firedRef = useRef<Set<string>>(new Set());
-    const [reminders, setReminders] = useState<Reminder[]>([]);
-
-    // Listen to reminders
-    useEffect(() => {
-        if (!user) return;
-
-        const remindersRef = collection(db, "users", user.uid, "reminders");
-        const q = query(remindersRef, orderBy("due_at", "asc"));
-
-        const unsub = onSnapshot(
-            q,
-            (snapshot) => {
-                const items = snapshot.docs.map(doc => {
-                    const data = doc.data() as any;
-                    if (!data.notifications) data.notifications = [];
-                    return { id: doc.id, ...data } as Reminder;
-                });
-                setReminders(items.filter(r => r.status === "pending"));
-            },
-            (err) => {
-                console.error("InAppNotifier snapshot error:", err);
-            }
-        );
-
-        return () => unsub();
-    }, [user]);
+    // Use shared data from provider — NO separate listener
+    const { allActiveReminders: reminders } = useReminders();
 
     // Check every 30s for due notifications
     useEffect(() => {
@@ -54,7 +29,7 @@ export function InAppNotifier() {
             const now = new Date();
 
             for (const reminder of reminders) {
-                const dueAt = reminder.due_at.toDate();
+                const dueAt = reminder.due_at?.toDate ? reminder.due_at.toDate() : new Date(reminder.due_at as any);
 
                 for (const notif of reminder.notifications) {
                     if (notif.sent) continue;

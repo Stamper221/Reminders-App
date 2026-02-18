@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 
 console.log("Firebase Client: Initializing with projectId:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
 
@@ -33,7 +33,19 @@ try {
 
     app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     auth = getAuth(app);
-    db = getFirestore(app);
+
+    // Use persistent local cache (IndexedDB) to minimize Firestore reads on page reloads.
+    // initializeFirestore can only be called once per app; on HMR reloads we fall back to getFirestore.
+    try {
+        db = initializeFirestore(app, {
+            localCache: persistentLocalCache({
+                tabManager: persistentMultipleTabManager(),
+            }),
+        });
+    } catch (e) {
+        // Already initialized (e.g., during hot module replacement) — reuse existing instance
+        db = getFirestore(app);
+    }
     console.log("Firebase Client: Initialized successfully");
 } catch (error) {
     console.error("Firebase Client: Initialization failed", error);
