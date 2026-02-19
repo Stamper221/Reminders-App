@@ -4,7 +4,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { getRoutines, deleteRoutine, updateRoutine } from "@/lib/routines";
-import { removeRoutineQueue } from "@/lib/queueSync";
 import { Routine } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2, Calendar, Clock, Trash2, Power, Briefcase } from "lucide-react";
@@ -46,9 +45,33 @@ export default function RoutinesPage() {
             setRoutines(routines.map(r => r.id === routine.id ? { ...r, active: !r.active } : r));
 
             if (routine.active) {
-                // Disabling: remove future generated reminders + queue items
-                removeRoutineQueue(routine.id, true);
-                toast.success("Routine disabled — future reminders removed");
+                // Disabling: remove generated reminders + queue items (AWAIT this!)
+                try {
+                    const token = await user.getIdToken();
+                    const res = await fetch("/api/queue/sync", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({
+                            action: "removeRoutine",
+                            routineId: routine.id,
+                            deleteFutureReminders: true,
+                        }),
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        toast.success(`Routine disabled — ${data.deletedReminders || 0} reminders removed`);
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        console.error("Disable cascade error:", err);
+                        toast.error("Routine disabled but cleanup failed");
+                    }
+                } catch (e) {
+                    console.error("Disable cascade network error:", e);
+                    toast.error("Routine disabled but cleanup failed");
+                }
             } else {
                 // Enabling: immediately generate catch-up reminders for next 24h
                 toast.success("Routine enabled");
