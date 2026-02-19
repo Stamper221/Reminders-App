@@ -5,6 +5,7 @@ import {
 } from "firebase/firestore";
 import { Reminder, CreateReminderInput, ReminderStatus } from "@/lib/types";
 import { syncReminderQueue, removeReminderQueue } from "@/lib/queueSync";
+import { deleteField } from "firebase/firestore";
 
 const REMINDERS_COLLECTION = (uid: string) => `users/${uid}/reminders`;
 
@@ -50,7 +51,7 @@ export const addReminder = async (uid: string, input: CreateReminderInput) => {
     return docRef;
 };
 
-export const updateReminder = async (uid: string, reminderId: string, updates: Partial<Reminder>) => {
+export const updateReminder = async (uid: string, reminderId: string, updates: Partial<Reminder> & { repeatRule?: any }) => {
     const docRef = doc(db, `users/${uid}/reminders`, reminderId);
 
     // Strip undefined values — Firestore rejects them
@@ -61,6 +62,13 @@ export const updateReminder = async (uid: string, reminderId: string, updates: P
         }
     }
     cleanUpdates.updated_at = serverTimestamp();
+
+    // If repeatRule is explicitly set to null, use deleteField()
+    // and also remove generationStatus
+    if ('repeatRule' in updates && updates.repeatRule === null) {
+        cleanUpdates.repeatRule = deleteField();
+        cleanUpdates.generationStatus = deleteField();
+    }
 
     await updateDoc(docRef, cleanUpdates);
 

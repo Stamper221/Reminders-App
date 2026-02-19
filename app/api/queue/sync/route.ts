@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
             // Remove queue items for this routine's reminders
             const removedQueue = await removeQueueForRoutine(uid, routineId);
 
-            // Optionally delete future routine-generated reminders
+            // Delete routine-generated pending reminders
             let deletedReminders = 0;
             if (deleteFutureReminders) {
                 const remindersRef = db.collection("users").doc(uid).collection("reminders");
@@ -104,6 +104,43 @@ export async function POST(request: NextRequest) {
                 removedQueueItems: removedQueue,
                 deletedReminders,
             });
+        }
+
+        // Remove all future repeat-generated instances for a repeat chain
+        if (action === "removeRepeatChain" && body.rootId) {
+            const { rootId, keepReminderId } = body;
+            const remindersRef = db.collection("users").doc(uid).collection("reminders");
+
+            // Single-field query on rootId (auto-indexed)
+            const chainDocs = await remindersRef
+                .where("rootId", "==", rootId)
+                .get();
+
+            let deletedReminders = 0;
+            if (!chainDocs.empty) {
+                const batch = db.batch();
+                for (const reminderDoc of chainDocs.docs) {
+                    // Skip the one we want to keep (the original)
+                    if (reminderDoc.id === keepReminderId) continue;
+                    // Only delete pending/snoozed
+                    const data = reminderDoc.data();
+                    if (data.status === "pending" || data.status === "snoozed") {
+                        batch.delete(reminderDoc.ref);
+                        // Also remove queue items for this reminder
+                        const queueItems = await db.collection("users").doc(uid)
+                            .collection("notification_queue")
+                            .where("reminderId", "==", reminderDoc.id)
+                            .get();
+                        for (const qDoc of queueItems.docs) {
+                            batch.delete(qDoc.ref);
+                        }
+                        deletedReminders++;
+                    }
+                }
+                if (deletedReminders > 0) await batch.commit();
+            }
+
+            return NextResponse.json({ success: true, deletedReminders });
         }
 
         return NextResponse.json({ error: "Invalid action or missing params" }, { status: 400 });

@@ -147,8 +147,34 @@ export function ReminderForm({ initialData, onSuccess }: ReminderFormProps) {
                 };
                 if (repeatRule) {
                     updatePayload.repeatRule = repeatRule;
+                } else if (initialData.repeatRule) {
+                    // Repeat was REMOVED — explicitly set to null so updateReminder
+                    // uses deleteField() and we cascade-delete future instances
+                    updatePayload.repeatRule = null;
                 }
                 await updateReminder(user.uid, initialData.id, updatePayload);
+
+                // If repeat was removed, delete all future generated instances
+                if (!repeatRule && initialData.repeatRule && initialData.rootId) {
+                    try {
+                        const token = await user.getIdToken();
+                        await fetch("/api/queue/sync", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": `Bearer ${token}`,
+                            },
+                            body: JSON.stringify({
+                                action: "removeRepeatChain",
+                                rootId: initialData.rootId,
+                                keepReminderId: initialData.id,
+                            }),
+                        });
+                    } catch (e) {
+                        console.warn("Failed to clean up repeat instances:", e);
+                    }
+                }
+
                 toast.success("Reminder updated");
             } else {
                 const docRef = await addReminder(user.uid, payload as any);
