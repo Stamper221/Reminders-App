@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { getRoutines, deleteRoutine, updateRoutine } from "@/lib/routines";
 import { Routine } from "@/lib/types";
@@ -11,24 +11,23 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+// Module-level cache — persists across remounts (tab switches)
+let routinesCache: Routine[] | null = null;
+
 export default function RoutinesPage() {
     const { user } = useAuth();
-    const [routines, setRoutines] = useState<Routine[]>([]);
-    const [loading, setLoading] = useState(true);
-    const loadedRef = useRef(false);
+    const [routines, setRoutines] = useState<Routine[]>(routinesCache || []);
+    const [loading, setLoading] = useState(routinesCache === null);
 
-    // Load routines only once per user session (not on every tab switch)
     useEffect(() => {
-        if (user && !loadedRef.current) {
-            loadedRef.current = true;
-            loadRoutines();
-        }
+        if (user) loadRoutines();
     }, [user]);
 
     const loadRoutines = async () => {
         if (!user) return;
         try {
             const data = await getRoutines(user.uid);
+            routinesCache = data;
             setRoutines(data);
         } catch (error) {
             console.error(error);
