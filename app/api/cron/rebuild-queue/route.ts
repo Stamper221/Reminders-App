@@ -31,7 +31,7 @@ const db = getFirestore();
  * by cron-job.org. For each user:
  *   1. Generate routine instances for today (if not already generated)
  *   2. Process repeat templates that need next occurrences
- *   3. Rebuild the notification_queue for the next 48 hours
+ *   3. Rebuild the notification_queue for the next 24 hours
  *
  * Uses a per-user lastRebuildDate lock to prevent duplicate rebuilds.
  */
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
             // ── Step 2: Process repeats (generate next occurrences within horizon) ──
             let repeatsGenerated = 0;
             try {
-                const futureWindow = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+                const futureWindow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
                 const remindersRef = db.collection("users").doc(uid).collection("reminders");
                 const pendingRepeats = await remindersRef.where("generationStatus", "==", "pending").get();
 
@@ -178,10 +178,10 @@ export async function POST(request: NextRequest) {
                 console.error(`Repeat generation failed for ${uid}:`, e.message);
             }
 
-            // ── Step 3: Rebuild notification queue for next 48 hours ──
+            // ── Step 3: Rebuild notification queue for next 24 hours ──
             let queueResult = { queued: 0, remindersScanned: 0 };
             try {
-                queueResult = await rebuildQueueForUser(uid, 48);
+                queueResult = await rebuildQueueForUser(uid, 24);
             } catch (e: any) {
                 console.error(`Queue rebuild failed for ${uid}:`, e.message);
             }

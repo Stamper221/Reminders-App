@@ -135,22 +135,18 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
     // --- Background Music (Generative Ambient Drone) ---
 
     const stopMusic = () => {
+        // Stop immediately - disconnect nodes first for instant silence
+        musicNodesRef.current.forEach(node => {
+            try { node.stop(); node.disconnect(); } catch (e) { }
+        });
+        musicNodesRef.current = [];
+
         if (gainNodeRef.current) {
-            // Fade out
-            const ctx = audioCtxRef.current;
-            if (ctx) {
-                gainNodeRef.current.gain.setTargetAtTime(0, ctx.currentTime, 0.5);
-            }
+            try { gainNodeRef.current.disconnect(); } catch (e) { }
+            gainNodeRef.current = null;
         }
 
-        // Wait for fade then stop nodes
-        setTimeout(() => {
-            musicNodesRef.current.forEach(node => {
-                try { node.stop(); node.disconnect(); } catch (e) { }
-            });
-            musicNodesRef.current = [];
-            setIsMusicPlaying(false);
-        }, 1000);
+        setIsMusicPlaying(false);
     };
 
     const startMusic = () => {

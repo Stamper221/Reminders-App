@@ -1,16 +1,14 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { getRoutines, deleteRoutine, updateRoutine } from "@/lib/routines";
 import { removeRoutineQueue } from "@/lib/queueSync";
 import { Routine } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Plus, Loader2, Calendar, Clock, Trash2, Power, Briefcase, Play } from "lucide-react";
+import { Plus, Loader2, Calendar, Clock, Trash2, Power, Briefcase } from "lucide-react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -18,9 +16,12 @@ export default function RoutinesPage() {
     const { user } = useAuth();
     const [routines, setRoutines] = useState<Routine[]>([]);
     const [loading, setLoading] = useState(true);
+    const loadedRef = useRef(false);
 
+    // Load routines only once per user session (not on every tab switch)
     useEffect(() => {
-        if (user) {
+        if (user && !loadedRef.current) {
+            loadedRef.current = true;
             loadRoutines();
         }
     }, [user]);
@@ -45,11 +46,11 @@ export default function RoutinesPage() {
             setRoutines(routines.map(r => r.id === routine.id ? { ...r, active: !r.active } : r));
 
             if (routine.active) {
-                // Pausing: remove future generated reminders + queue items
+                // Disabling: remove future generated reminders + queue items
                 removeRoutineQueue(routine.id, true);
-                toast.success("Routine paused — future reminders removed");
+                toast.success("Routine disabled — future reminders removed");
             } else {
-                toast.success("Routine activated");
+                toast.success("Routine enabled — reminders will be generated at next daily check");
             }
         } catch (e) {
             toast.error("Failed to update routine");
@@ -58,29 +59,13 @@ export default function RoutinesPage() {
 
     const handleDelete = async (routine: Routine) => {
         if (!user || !routine.id) return;
-        if (!confirm("Delete this routine? Future generated reminders and scheduled notifications from this routine will also be removed.")) return;
+        if (!confirm("Delete this routine? Future generated reminders and scheduled notifications will also be removed.")) return;
         try {
             await deleteRoutine(user.uid, routine.id);
             setRoutines(routines.filter(r => r.id !== routine.id));
             toast.success("Routine deleted");
         } catch (e) {
             toast.error("Failed to delete routine");
-        }
-    };
-
-    const handleRun = async (routine: Routine) => {
-        if (!user || !routine.id) return;
-        try {
-            const token = await user.getIdToken();
-            const res = await fetch(`/api/routines/${routine.id}/run`, {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (!res.ok) throw new Error("Failed");
-            const data = await res.json();
-            toast.success(`Generated ${data.count} reminders`);
-        } catch (e) {
-            toast.error("Failed to run routine");
         }
     };
 
@@ -119,12 +104,10 @@ export default function RoutinesPage() {
             ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {routines.map((routine) => (
-                        <motion.div
+                        <div
                             key={routine.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
                             className={cn(
-                                "group relative overflow-hidden rounded-xl border bg-card p-5 transition-all hover:shadow-lg",
+                                "group relative overflow-hidden rounded-xl border bg-card p-5 transition-shadow hover:shadow-lg",
                                 !routine.active && "opacity-75 grayscale-[0.5]"
                             )}
                         >
@@ -149,18 +132,9 @@ export default function RoutinesPage() {
                                     variant="ghost"
                                     className={cn("h-8 w-8", routine.active ? "text-green-500" : "text-muted-foreground")}
                                     onClick={() => toggleActive(routine)}
-                                    title={routine.active ? "Pause Routine" : "Activate Routine"}
+                                    title={routine.active ? "Disable Routine" : "Enable Routine"}
                                 >
                                     <Power className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8 text-blue-500"
-                                    onClick={() => handleRun(routine)}
-                                    title="Run Now"
-                                >
-                                    <Play className="w-4 h-4" />
                                 </Button>
                             </div>
 
@@ -181,7 +155,7 @@ export default function RoutinesPage() {
 
                             <div className="pt-4 border-t flex items-center justify-between text-xs text-muted-foreground">
                                 <span>
-                                    Next: {routine.active ? "Tomorrow" : "Paused"}
+                                    {routine.active ? "Active — auto-generates daily" : "Disabled"}
                                 </span>
                                 <Button
                                     size="sm"
@@ -194,7 +168,7 @@ export default function RoutinesPage() {
                                     Delete
                                 </Button>
                             </div>
-                        </motion.div>
+                        </div>
                     ))}
                 </div>
             )}
