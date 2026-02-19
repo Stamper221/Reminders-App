@@ -10,6 +10,7 @@ import { Plus, Loader2, Calendar, Clock, Trash2, Power, Briefcase } from "lucide
 import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { PageTransition } from "@/components/ui/page-transition";
 
 // Module-level cache — persists across remounts (tab switches)
 let routinesCache: Routine[] | null = null;
@@ -113,104 +114,106 @@ export default function RoutinesPage() {
     }
 
     return (
-        <div className="container max-w-4xl py-6 space-y-8">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Routines</h1>
-                    <p className="text-muted-foreground mt-1">Automate your habits and recurring tasks.</p>
-                </div>
-                <Link href="/routines/create">
-                    <Button className="gap-2">
-                        <Plus className="w-4 h-4" />
-                        New Routine
-                    </Button>
-                </Link>
-            </div>
-
-            {routines.length === 0 ? (
-                <div className="text-center py-20 border-2 border-dashed rounded-xl bg-muted/20">
-                    <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Briefcase className="w-8 h-8 text-primary" />
+        <PageTransition>
+            <div className="container max-w-4xl py-6 space-y-8">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight">Routines</h1>
+                        <p className="text-muted-foreground mt-1">Automate your habits and recurring tasks.</p>
                     </div>
-                    <h3 className="text-xl font-semibold mb-2">No routines yet</h3>
-                    <p className="text-muted-foreground max-w-sm mx-auto mb-6">
-                        Create a routine to automatically generate reminders for your daily or weekly habits.
-                    </p>
                     <Link href="/routines/create">
-                        <Button variant="outline">Create your first routine</Button>
+                        <Button className="gap-2">
+                            <Plus className="w-4 h-4" />
+                            New Routine
+                        </Button>
                     </Link>
                 </div>
-            ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {routines.map((routine) => (
-                        <div
-                            key={routine.id}
-                            className={cn(
-                                "group relative overflow-hidden rounded-xl border bg-card p-5 transition-shadow hover:shadow-lg",
-                                !routine.active && "opacity-75 grayscale-[0.5]"
-                            )}
-                        >
-                            <div className="flex items-start justify-between mb-4">
-                                <Link href={`/routines/${routine.id}`} className="block flex-1 mr-4">
-                                    <h3 className="font-semibold text-lg hover:underline underline-offset-4 decoration-primary/50">
-                                        {routine.title}
-                                    </h3>
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                                        <Calendar className="w-3.5 h-3.5" />
-                                        <span>
-                                            {routine.schedule.type === 'daily' ? 'Daily' :
-                                                routine.schedule.type === 'weekly' ? 'Weekly' : 'Custom'}
-                                        </span>
-                                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-secondary">
-                                            {routine.steps.length} steps
-                                        </span>
-                                    </div>
-                                </Link>
-                                <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className={cn("h-8 w-8", routine.active ? "text-green-500" : "text-muted-foreground")}
-                                    onClick={() => toggleActive(routine)}
-                                    title={routine.active ? "Disable Routine" : "Enable Routine"}
-                                >
-                                    <Power className="w-4 h-4" />
-                                </Button>
-                            </div>
 
-                            <div className="space-y-2 mb-4">
-                                {routine.steps.slice(0, 3).map((step) => (
-                                    <div key={step.id} className="flex items-center gap-2 text-sm">
-                                        <Clock className="w-3.5 h-3.5 text-primary/70" />
-                                        <span className="font-mono text-xs text-muted-foreground">{step.time}</span>
-                                        <span className="truncate">{step.title}</span>
-                                    </div>
-                                ))}
-                                {routine.steps.length > 3 && (
-                                    <p className="text-xs text-muted-foreground pl-6">
-                                        + {routine.steps.length - 3} more
-                                    </p>
-                                )}
-                            </div>
-
-                            <div className="pt-4 border-t flex items-center justify-between text-xs text-muted-foreground">
-                                <span>
-                                    {routine.active ? "Active — auto-generates daily" : "Disabled"}
-                                </span>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    onClick={() => handleDelete(routine)}
-                                    title="Delete Routine"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5 mr-1" />
-                                    Delete
-                                </Button>
-                            </div>
+                {routines.length === 0 ? (
+                    <div className="text-center py-20 border-2 border-dashed rounded-xl bg-muted/20">
+                        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Briefcase className="w-8 h-8 text-primary" />
                         </div>
-                    ))}
-                </div>
-            )}
-        </div>
+                        <h3 className="text-xl font-semibold mb-2">No routines yet</h3>
+                        <p className="text-muted-foreground max-w-sm mx-auto mb-6">
+                            Create a routine to automatically generate reminders for your daily or weekly habits.
+                        </p>
+                        <Link href="/routines/create">
+                            <Button variant="outline">Create your first routine</Button>
+                        </Link>
+                    </div>
+                ) : (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {routines.map((routine) => (
+                            <div
+                                key={routine.id}
+                                className={cn(
+                                    "group relative overflow-hidden rounded-xl border bg-card p-5 transition-shadow hover:shadow-lg",
+                                    !routine.active && "opacity-75 grayscale-[0.5]"
+                                )}
+                            >
+                                <div className="flex items-start justify-between mb-4">
+                                    <Link href={`/routines/${routine.id}`} className="block flex-1 mr-4">
+                                        <h3 className="font-semibold text-lg hover:underline underline-offset-4 decoration-primary/50">
+                                            {routine.title}
+                                        </h3>
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                                            <Calendar className="w-3.5 h-3.5" />
+                                            <span>
+                                                {routine.schedule.type === 'daily' ? 'Daily' :
+                                                    routine.schedule.type === 'weekly' ? 'Weekly' : 'Custom'}
+                                            </span>
+                                            <span className="text-xs px-1.5 py-0.5 rounded-full bg-secondary">
+                                                {routine.steps.length} steps
+                                            </span>
+                                        </div>
+                                    </Link>
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className={cn("h-8 w-8", routine.active ? "text-green-500" : "text-muted-foreground")}
+                                        onClick={() => toggleActive(routine)}
+                                        title={routine.active ? "Disable Routine" : "Enable Routine"}
+                                    >
+                                        <Power className="w-4 h-4" />
+                                    </Button>
+                                </div>
+
+                                <div className="space-y-2 mb-4">
+                                    {routine.steps.slice(0, 3).map((step) => (
+                                        <div key={step.id} className="flex items-center gap-2 text-sm">
+                                            <Clock className="w-3.5 h-3.5 text-primary/70" />
+                                            <span className="font-mono text-xs text-muted-foreground">{step.time}</span>
+                                            <span className="truncate">{step.title}</span>
+                                        </div>
+                                    ))}
+                                    {routine.steps.length > 3 && (
+                                        <p className="text-xs text-muted-foreground pl-6">
+                                            + {routine.steps.length - 3} more
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="pt-4 border-t flex items-center justify-between text-xs text-muted-foreground">
+                                    <span>
+                                        {routine.active ? "Active — auto-generates daily" : "Disabled"}
+                                    </span>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        onClick={() => handleDelete(routine)}
+                                        title="Delete Routine"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5 mr-1" />
+                                        Delete
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </PageTransition>
     );
 }

@@ -116,14 +116,6 @@ export function Sidebar({ className }: SidebarProps) {
                                         : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
                                 )}
                             >
-                                {isActive && (
-                                    <motion.div
-                                        layoutId="sidebar-active"
-                                        className="absolute inset-0 rounded-lg bg-accent"
-                                        transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
-                                        style={{ zIndex: -1 }}
-                                    />
-                                )}
                                 <link.icon
                                     className={cn(
                                         "h-4 w-4 shrink-0",

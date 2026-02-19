@@ -131,10 +131,17 @@ export const clearCompletedReminders = async (uid: string) => {
     const snapshot = await getDocs(q);
     if (snapshot.empty) return 0;
 
-    const batch = writeBatch(db);
-    snapshot.docs.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
-    return snapshot.size;
+    // Firestore batches max 500 writes — split if needed
+    const batchSize = 500;
+    let deleted = 0;
+    for (let i = 0; i < snapshot.docs.length; i += batchSize) {
+        const chunk = snapshot.docs.slice(i, i + batchSize);
+        const batch = writeBatch(db);
+        chunk.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+        deleted += chunk.length;
+    }
+    return deleted;
 };
 
 /**

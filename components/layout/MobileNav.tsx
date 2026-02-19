@@ -56,7 +56,7 @@ export function MobileNav() {
                                     onClick={link.onClick}
                                     className={cn(
                                         "relative flex flex-col items-center justify-center w-full h-full gap-0.5 text-[10px] font-medium transition-colors duration-200",
-                                        "text-muted-foreground"
+                                        "text-[var(--icon-accent)]"
                                     )}
                                 >
                                     <Icon className="h-5 w-5" />
@@ -76,13 +76,6 @@ export function MobileNav() {
                                         : "text-[var(--icon-accent)]"
                                 )}
                             >
-                                {isActive && (
-                                    <motion.div
-                                        layoutId="mobile-active"
-                                        className="absolute -top-0.5 h-0.5 w-8 rounded-full gradient-primary"
-                                        transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
-                                    />
-                                )}
                                 <Icon className="h-5 w-5" />
                                 <span>{link.label}</span>
                             </Link>
