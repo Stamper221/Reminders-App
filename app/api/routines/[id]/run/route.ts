@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
-import { generateRoutineWindow } from "@/lib/scheduler";
-import { Routine } from "@/lib/types";
 import { getAuth } from "firebase-admin/auth";
+import { Routine } from "@/lib/types";
+import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import { format, getDay, addDays } from "date-fns";
+import { syncQueueForReminder } from "@/lib/notificationQueue";
+import crypto from "crypto";
 
 if (getApps().length === 0) {
     const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
     if (serviceAccount) {
-        initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
+        try {
+            initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
+        } catch (e) {
+            initializeApp({ projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID });
+        }
     } else {
         initializeApp({ projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID });
     }
@@ -17,21 +24,23 @@ if (getApps().length === 0) {
 const db = getFirestore();
 
 /**
- * Recursively removes undefined values from an object (Firestore rejects them).
+ * Deterministic doc ID for a routine-generated reminder.
+ * Format: hash of "routineId:stepId:YYYY-MM-DD"
+ * This prevents duplicates when the same routine is re-enabled multiple times.
  */
-function stripUndefined(obj: Record<string, any>): Record<string, any> {
-    const clean: Record<string, any> = {};
-    for (const [key, value] of Object.entries(obj)) {
-        if (value === undefined) continue;
-        if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-            clean[key] = stripUndefined(value);
-        } else {
-            clean[key] = value;
-        }
-    }
-    return clean;
+function deterministicId(routineId: string, stepId: string, dateStr: string): string {
+    const raw = `${routineId}:${stepId}:${dateStr}`;
+    return crypto.createHash("sha256").update(raw).digest("hex").substring(0, 20);
 }
 
+/**
+ * POST /api/routines/[id]/run
+ *
+ * "Enable catch-up" endpoint: generates reminders for the current 24-hour window.
+ * Only creates reminders whose due_at is still in the future (no past times).
+ * Uses deterministic document IDs to prevent duplicates.
+ * Also syncs notification queue items for each created reminder.
+ */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id: routineId } = await params;
 
@@ -40,7 +49,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const token = authHeader.split("Bearer ")[1];
-    let uid;
+    let uid: string;
     try {
         const decoded = await getAuth().verifyIdToken(token);
         uid = decoded.uid;
@@ -57,46 +66,111 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
 
         const routine = { ...docSnap.data(), id: routineId } as Routine;
-        const timezone = routine.timezone || 'UTC';
+        const timezone = routine.timezone || "UTC";
+        const now = new Date();
+        const localNow = toZonedTime(now, timezone);
+        const todayStr = format(localNow, "yyyy-MM-dd");
 
-        // Generate reminders for ALL scheduled days in a 30-day window
-        const newReminders = generateRoutineWindow(routine, 30);
+        // Determine which days to check (today + tomorrow = 24h window)
+        const daysToCheck: Date[] = [];
+        const today = new Date(localNow);
+        today.setHours(0, 0, 0, 0);
+        daysToCheck.push(today);
 
-        if (newReminders.length === 0) {
-            return NextResponse.json({ message: "No steps to generate (no matching days in the next 30 days)" });
-        }
+        const tomorrow = addDays(today, 1);
+        daysToCheck.push(tomorrow);
 
         const batch = db.batch();
-        const userRemindersRef = db.collection(`users/${uid}/reminders`);
+        const remindersRef = db.collection(`users/${uid}/reminders`);
+        let createdCount = 0;
+        const createdReminderIds: string[] = [];
 
-        newReminders.forEach(r => {
-            const ref = userRemindersRef.doc();
-            // Safely extract due_at as a Date
-            const dueAtDate = r.due_at && typeof (r.due_at as any).toDate === 'function'
-                ? (r.due_at as any).toDate()
-                : (r.due_at instanceof Date ? r.due_at : new Date());
+        for (const day of daysToCheck) {
+            const dayOfWeek = getDay(day);
+            const dateStr = format(day, "yyyy-MM-dd");
 
-            // Build a clean document without any undefined values
-            const reminderDoc = stripUndefined({
-                uid,
-                title: r.title || 'Untitled',
-                notes: r.notes || '',
-                status: r.status || 'pending',
-                due_at: dueAtDate,
-                timezone: r.timezone || timezone,
-                notifications: r.notifications || [],
-                created_at: new Date(),
-                updated_at: new Date(),
-                rootId: routineId,
-                routineId: routineId,
-            });
+            // Check if routine runs on this day
+            let isDue = false;
+            if (routine.schedule.type === "daily") {
+                isDue = true;
+            } else if (routine.schedule.type === "weekly" || routine.schedule.type === "custom") {
+                if (routine.schedule.days && routine.schedule.days.includes(dayOfWeek)) {
+                    isDue = true;
+                }
+            }
+            if (!isDue) continue;
 
-            batch.set(ref, reminderDoc);
+            // Generate reminders for each step
+            for (const step of routine.steps) {
+                const [hours, minutes] = step.time.split(":").map(Number);
+                const localTime = new Date(day);
+                localTime.setHours(hours, minutes, 0, 0);
+
+                // Convert to UTC
+                let dueAtUtc: Date;
+                try {
+                    dueAtUtc = fromZonedTime(localTime, timezone);
+                } catch {
+                    dueAtUtc = localTime;
+                }
+
+                // Skip if this time is already in the past
+                if (dueAtUtc <= now) continue;
+
+                // Skip if beyond 24h window
+                const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+                if (dueAtUtc > twentyFourHoursFromNow) continue;
+
+                // Deterministic ID — prevents duplicates
+                const docId = deterministicId(routineId, step.id, dateStr);
+                const docRef = remindersRef.doc(docId);
+
+                const reminderData: Record<string, any> = {
+                    uid,
+                    title: step.title || "Untitled",
+                    notes: step.notes || "",
+                    status: "pending",
+                    due_at: dueAtUtc,
+                    timezone,
+                    notifications: (step.notifications || []).map((n: any) => ({
+                        ...n,
+                        sent: false,
+                    })),
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                    routineId,
+                    routineDate: dateStr,
+                    rootId: routineId,
+                };
+
+                // Use set with merge to be idempotent
+                batch.set(docRef, reminderData, { merge: true });
+                createdReminderIds.push(docId);
+                createdCount++;
+            }
+        }
+
+        if (createdCount > 0) {
+            // Mark routine as ran for today
+            batch.update(routineRef, { lastRun: new Date() });
+            await batch.commit();
+
+            // Sync queue items for each created reminder (fire-and-forget)
+            for (const remId of createdReminderIds) {
+                const reminderDoc = await remindersRef.doc(remId).get();
+                if (reminderDoc.exists) {
+                    await syncQueueForReminder(uid, remId, reminderDoc.data());
+                }
+            }
+        }
+
+        return NextResponse.json({
+            success: true,
+            count: createdCount,
+            message: createdCount > 0
+                ? `Generated ${createdCount} reminders for the next 24 hours`
+                : "No upcoming reminders needed in the next 24 hours",
         });
-
-        await batch.commit();
-
-        return NextResponse.json({ success: true, count: newReminders.length });
     } catch (error: any) {
         console.error("Run Routine Error:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });

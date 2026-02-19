@@ -50,7 +50,24 @@ export default function RoutinesPage() {
                 removeRoutineQueue(routine.id, true);
                 toast.success("Routine disabled — future reminders removed");
             } else {
-                toast.success("Routine enabled — reminders will be generated at next daily check");
+                // Enabling: immediately generate catch-up reminders for next 24h
+                toast.success("Routine enabled");
+                try {
+                    const token = await user.getIdToken();
+                    const res = await fetch(`/api/routines/${routine.id}/run`, {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${token}` },
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.count > 0) {
+                            toast.success(`${data.count} reminders created for today`);
+                        }
+                    }
+                } catch (e) {
+                    // Non-critical: daily check will catch up
+                    console.warn("Catch-up generation failed:", e);
+                }
             }
         } catch (e) {
             toast.error("Failed to update routine");
