@@ -12,7 +12,7 @@ import { InAppNotifier } from "@/components/notifications/InAppNotifier";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { SidebarProvider } from "@/components/providers/SidebarProvider";
 import { StarField } from "@/components/ui/StarField";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -23,6 +23,7 @@ export default function MainLayout({
 }) {
     const { user, loading } = useAuth();
     const router = useRouter();
+    const pathname = usePathname();
 
     useEffect(() => {
         if (!loading && !user) {
@@ -69,7 +70,7 @@ export default function MainLayout({
                             <div className="flex min-h-screen relative" style={{ zIndex: 1 }}>
                                 <Sidebar />
                                 <main className="flex-1 overflow-y-auto h-screen pb-24 md:pb-8">
-                                    <div className="p-5 md:p-8 max-w-5xl mx-auto page-transition">
+                                    <div key={pathname} className="p-5 md:p-8 max-w-5xl mx-auto page-transition">
                                         {children}
                                     </div>
                                 </main>
