@@ -73,7 +73,7 @@ export function MobileNav() {
                                     "relative flex flex-col items-center justify-center w-full h-full gap-0.5 text-[10px] font-medium transition-colors duration-200",
                                     isActive
                                         ? "text-primary"
-                                        : "text-muted-foreground"
+                                        : "text-[var(--icon-accent)]"
                                 )}
                             >
                                 {isActive && (

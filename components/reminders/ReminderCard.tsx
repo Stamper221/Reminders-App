@@ -136,26 +136,26 @@ export const ReminderCard = memo(function ReminderCard({ reminder, onEdit }: Rem
                                 </span>
                             )}
                             {isDueToday && !isOverdue && reminder.status === 'pending' && (
-                                <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-[var(--badge-bg)] text-[var(--icon-accent)]">
                                     Today
                                 </span>
                             )}
 
                             {/* Notification badges */}
                             {hasSms && (
-                                <span className="flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                                <span className="flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--badge-bg)] text-[var(--icon-accent)]">
                                     <MessageSquare className="h-2.5 w-2.5" />
                                     SMS
                                 </span>
                             )}
                             {hasPush && (
-                                <span className="flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                                <span className="flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--badge-bg)] text-[var(--icon-accent)]">
                                     <Bell className="h-2.5 w-2.5" />
                                     Push
                                 </span>
                             )}
                             {hasEmail && (
-                                <span className="flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                <span className="flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--badge-bg)] text-[var(--icon-accent)]">
                                     <Mail className="h-2.5 w-2.5" />
                                     Email
                                 </span>
@@ -205,7 +205,7 @@ export const ReminderCard = memo(function ReminderCard({ reminder, onEdit }: Rem
                             transition={{ duration: 0.2, ease: "easeInOut" }}
                             className="overflow-hidden"
                         >
-                            <div className="mt-3 ml-10 p-3 rounded-lg bg-muted/50 border border-border/50">
+                            <div className="mt-3 ml-10 p-3 rounded-lg bg-muted/50 border border-[var(--card-border-subtle)]">
                                 <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">
                                     {reminder.notes}
                                 </p>

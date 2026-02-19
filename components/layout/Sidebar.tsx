@@ -127,7 +127,7 @@ export function Sidebar({ className }: SidebarProps) {
                                 <link.icon
                                     className={cn(
                                         "h-4 w-4 shrink-0",
-                                        isActive && "text-primary"
+                                        isActive ? "text-primary" : "text-[var(--icon-accent)]"
                                     )}
                                 />
                                 {!collapsed && link.label}
@@ -154,7 +154,7 @@ export function Sidebar({ className }: SidebarProps) {
                             : "gap-3 px-3 py-2.5"
                     )}
                 >
-                    <Settings className="h-4 w-4 shrink-0" />
+                    <Settings className="h-4 w-4 shrink-0 text-[var(--icon-accent)]" />
                     {!collapsed && "Settings"}
                 </button>
                 <button

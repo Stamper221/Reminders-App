@@ -27,6 +27,7 @@
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-icon-accent: var(--icon-accent);
   --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
   --radius-sm: 0.375rem;
@@ -75,6 +76,9 @@
   --shadow-lg: 0 10px 30px rgba(15, 23, 42, 0.1);
   --glass-bg: rgba(255, 255, 255, 0.50);
   --glass-border: rgba(255, 255, 255, 0.3);
+  --card-border-subtle: rgba(99, 102, 241, 0.10);
+  --badge-bg: rgba(99, 102, 241, 0.08);
+  --icon-accent: #6366f1;
 }
 
 /* ---- DARK MODE ---- */
@@ -117,6 +121,9 @@
   --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
   --glass-bg: rgba(21, 24, 41, 0.40);
   --glass-border: rgba(255, 255, 255, 0.06);
+  --card-border-subtle: rgba(129, 140, 248, 0.12);
+  --badge-bg: rgba(129, 140, 248, 0.10);
+  --icon-accent: #818cf8;
 }
 
 /* ============================================================
@@ -203,13 +210,36 @@ body {
   background: var(--gradient-primary);
 }
 
-/* Card shadows */
+/* Card shadows — with theme-tinted border glow */
 .card-shadow {
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-card), inset 0 0.5px 0 0 var(--card-border-subtle);
 }
 
 .card-shadow-hover {
-  box-shadow: var(--shadow-card-hover);
+  box-shadow: var(--shadow-card-hover), inset 0 0.5px 0 0 var(--card-border-subtle);
+}
+
+/* Theme-tinted badge backgrounds */
+.theme-badge {
+  background: var(--badge-bg);
+  color: var(--primary);
+}
+
+/* Smooth page transition for tab switching */
+.page-transition {
+  animation: page-enter 0.25s ease-out;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Smooth scrollbar */
