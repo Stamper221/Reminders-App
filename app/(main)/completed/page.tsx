@@ -22,7 +22,8 @@ export default function CompletedPage() {
             toast.success(`Cleared ${count} completed reminder${count !== 1 ? 's' : ''}`);
         } catch (error) {
             console.error(error);
-            toast.error("Failed to clear completed reminders");
+            console.error(error);
+            toast.error(error instanceof Error ? error.message : "Failed to clear completed reminders");
         } finally {
             setClearing(false);
         }

@@ -126,17 +126,21 @@ export const clearUpcomingReminders = async (uid: string) => {
  */
 export const clearCompletedReminders = async (uid: string) => {
     const collRef = collection(db, `users/${uid}/reminders`);
-    const q = query(collRef, where("status", "==", "done"));
-    const snapshot = await getDocs(q);
+    // Fetch ALL reminders to verify if 'status' index is the issue
+    // This uses the default __name__ index which is always present
+    const snapshot = await getDocs(collRef);
     if (snapshot.empty) return 0;
+
+    const completedDocs = snapshot.docs.filter(d => d.data().status === "done");
+    if (completedDocs.length === 0) return 0;
 
     // Use deleteDoc in parallel chunks to avoid batch issues
     const chunkSize = 50;
-    for (let i = 0; i < snapshot.docs.length; i += chunkSize) {
-        const chunk = snapshot.docs.slice(i, i + chunkSize);
+    for (let i = 0; i < completedDocs.length; i += chunkSize) {
+        const chunk = completedDocs.slice(i, i + chunkSize);
         await Promise.all(chunk.map(d => deleteDoc(d.ref)));
     }
-    return snapshot.size;
+    return completedDocs.length;
 };
 
 /**
