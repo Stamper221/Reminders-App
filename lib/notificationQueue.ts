@@ -228,16 +228,18 @@ export async function removeQueueForRoutine(uid: string, routineId: string) {
 
 /**
  * Get due queue items within a window. Used by the minute-runner.
+ * Window: [now - windowMinutes, now] — NEVER returns future items.
+ * This ensures notifications fire at or after their scheduledAt time,
+ * never early. The late window (default 2 min) handles cron drift.
  */
 export async function getDueQueueItems(uid: string, now: Date, windowMinutes: number = 2, maxItems: number = 50) {
     const queueRef = getQueueRef(uid);
     const windowStart = new Date(now.getTime() - windowMinutes * 60 * 1000);
-    const windowEnd = new Date(now.getTime() + windowMinutes * 60 * 1000);
 
     const snapshot = await queueRef
         .where("sent", "==", false)
         .where("scheduledAt", ">=", windowStart)
-        .where("scheduledAt", "<=", windowEnd)
+        .where("scheduledAt", "<=", now)
         .limit(maxItems)
         .get();
 
