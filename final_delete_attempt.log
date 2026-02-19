@@ -1,0 +1,4 @@
+(node:16216) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+[1m[31mError:[39m[22m The specified filters do not match any existing functions in project [1mreminders-app-3beb4[22m.

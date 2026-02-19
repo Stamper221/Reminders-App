@@ -4,6 +4,7 @@ import {
     Timestamp, serverTimestamp, query, where, orderBy, onSnapshot
 } from "firebase/firestore";
 import { Reminder, CreateReminderInput, ReminderStatus } from "@/lib/types";
+import { syncReminderQueue, removeReminderQueue } from "@/lib/queueSync";
 
 const REMINDERS_COLLECTION = (uid: string) => `users/${uid}/reminders`;
 
@@ -43,6 +44,9 @@ export const addReminder = async (uid: string, input: CreateReminderInput) => {
         await updateDoc(docRef, { rootId: docRef.id });
     }
 
+    // Sync notification queue (fire-and-forget)
+    syncReminderQueue(docRef.id);
+
     return docRef;
 };
 
@@ -58,17 +62,31 @@ export const updateReminder = async (uid: string, reminderId: string, updates: P
     }
     cleanUpdates.updated_at = serverTimestamp();
 
-    return await updateDoc(docRef, cleanUpdates);
+    await updateDoc(docRef, cleanUpdates);
+
+    // Sync notification queue (fire-and-forget)
+    syncReminderQueue(reminderId);
+
+    return;
 };
 
 export const deleteReminder = async (uid: string, reminderId: string) => {
     const docRef = doc(db, `users/${uid}/reminders`, reminderId);
-    return await deleteDoc(docRef);
+    await deleteDoc(docRef);
+    // Remove from notification queue (fire-and-forget)
+    removeReminderQueue(reminderId);
 };
 
 export const toggleReminderStatus = async (uid: string, reminderId: string, currentStatus: ReminderStatus) => {
     const newStatus: ReminderStatus = currentStatus === 'done' ? 'pending' : 'done';
-    return await updateReminder(uid, reminderId, { status: newStatus });
+    await updateReminder(uid, reminderId, { status: newStatus });
+
+    // On complete: remove queue items. On uncomplete: sync will re-create them.
+    if (newStatus === 'done') {
+        removeReminderQueue(reminderId);
+    } else {
+        syncReminderQueue(reminderId);
+    }
 };
 
 export const snoozeReminder = async (uid: string, reminderId: string, until: Date) => {

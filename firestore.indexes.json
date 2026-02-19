@@ -57,11 +57,43 @@
             ]
         },
         {
-            "collectionGroup": "reminders",
-            "queryScope": "COLLECTION_GROUP",
+            "collectionGroup": "notification_queue",
+            "queryScope": "COLLECTION",
             "fields": [
                 {
-                    "fieldPath": "status",
+                    "fieldPath": "sent",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "scheduledAt",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "notification_queue",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "reminderId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "sent",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "notification_queue",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "routineId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "sent",
                     "order": "ASCENDING"
                 }
             ]

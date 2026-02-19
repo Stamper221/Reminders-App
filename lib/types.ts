@@ -14,7 +14,7 @@ export interface UserProfile {
 
 export type ReminderStatus = 'pending' | 'done' | 'snoozed';
 
-export type NotificationType = 'sms' | 'push' | 'email' | 'both';
+export type NotificationType = 'sms' | 'push' | 'email' | 'both' | 'all';
 
 export interface NotificationSetting {
     id: string; // unique ID for optimization/tracking

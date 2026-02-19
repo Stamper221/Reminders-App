@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { getRoutines, deleteRoutine, updateRoutine } from "@/lib/routines";
+import { removeRoutineQueue } from "@/lib/queueSync";
 import { Routine } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2, Calendar, Clock, Trash2, Power, Briefcase, Play } from "lucide-react";
@@ -42,7 +43,14 @@ export default function RoutinesPage() {
         try {
             await updateRoutine(user.uid, routine.id, { active: !routine.active });
             setRoutines(routines.map(r => r.id === routine.id ? { ...r, active: !r.active } : r));
-            toast.success(routine.active ? "Routine paused" : "Routine activated");
+
+            if (routine.active) {
+                // Pausing: remove future generated reminders + queue items
+                removeRoutineQueue(routine.id, true);
+                toast.success("Routine paused — future reminders removed");
+            } else {
+                toast.success("Routine activated");
+            }
         } catch (e) {
             toast.error("Failed to update routine");
         }
@@ -50,7 +58,7 @@ export default function RoutinesPage() {
 
     const handleDelete = async (routine: Routine) => {
         if (!user || !routine.id) return;
-        if (!confirm("Delete this routine? History will be kept.")) return;
+        if (!confirm("Delete this routine? Future generated reminders and scheduled notifications from this routine will also be removed.")) return;
         try {
             await deleteRoutine(user.uid, routine.id);
             setRoutines(routines.filter(r => r.id !== routine.id));
@@ -174,15 +182,16 @@ export default function RoutinesPage() {
                             <div className="pt-4 border-t flex items-center justify-between text-xs text-muted-foreground">
                                 <span>
                                     Next: {routine.active ? "Tomorrow" : "Paused"}
-                                    {/* Ideally calculate next run, but complex client-side without heavy logic */}
                                 </span>
                                 <Button
-                                    size="icon"
+                                    size="sm"
                                     variant="ghost"
-                                    className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
                                     onClick={() => handleDelete(routine)}
+                                    title="Delete Routine"
                                 >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <Trash2 className="w-3.5 h-3.5 mr-1" />
+                                    Delete
                                 </Button>
                             </div>
                         </motion.div>

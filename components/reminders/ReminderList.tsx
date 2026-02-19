@@ -108,8 +108,8 @@ export function ReminderList({ filter }: ReminderListProps) {
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, x: -40, transition: { duration: 0.2 } }}
-                        transition={{ duration: 0.25, delay: index * 0.03 }}
-                        layout
+                        transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.15) }}
+                        layout={index < 20}
                     >
                         <ReminderCard
                             reminder={reminder}

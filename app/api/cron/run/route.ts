@@ -1,13 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import twilio from "twilio";
 import nodemailer from "nodemailer";
-import { formatInTimeZone, toZonedTime } from "date-fns-tz";
-import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import webpush from "web-push";
-import { calculateNextDue, generateRoutineInstances } from "@/lib/scheduler";
-import { Reminder, Routine } from "@/lib/types";
+import { getDueQueueItems } from "@/lib/notificationQueue";
+
+/**
+ * GET /api/cron/run
+ *
+ * MINUTE-RUNNER: Runs every 1-2 minutes via cron-job.org.
+ * Only reads the notification_queue — NO reminder scans.
+ *
+ * For each user:
+ *   1. Query notification_queue where sent==false AND scheduledAt ∈ [now-2m, now+2m], limit(50)
+ *   2. Send push/SMS/email per queue item channel
+ *   3. Mark sent=true
+ *   4. Also mark the original reminder notification as sent (to keep state consistent)
+ *
+ * Read budget: ~1 read per user when nothing is due (empty query result).
+ */
 
 // Initialize Firebase Admin (Singleton)
 if (getApps().length === 0) {
@@ -26,19 +39,19 @@ if (getApps().length === 0) {
 
 const db = getFirestore();
 
-// Initialize VAPID
+// VAPID
 const vapidSubject = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
 const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 const privateKey = process.env.VAPID_PRIVATE_KEY;
 if (publicKey && privateKey) webpush.setVapidDetails(vapidSubject, publicKey, privateKey);
 
-// Twilio Setup
+// Twilio
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const fromNumber = process.env.TWILIO_PHONE_NUMBER;
 const twilioClient = (accountSid && authToken) ? twilio(accountSid, authToken) : null;
 
-// SMTP Setup
+// SMTP
 const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
 const smtpPort = parseInt(process.env.SMTP_PORT || "587");
 const smtpUser = process.env.SMTP_USER;
@@ -54,277 +67,30 @@ if (smtpUser && smtpPass) {
     });
 }
 
-// Helper: Process Reminders (Notifications)
-async function processReminders(now: Date) {
-    const remindersRef = db.collectionGroup("reminders");
-
-    // Optimization: Only check reminders within a relevant time window to save Read Quotas.
-    // Window: 7 days ago (to catch late/overdue) to 26 hours ahead (max offset 24h + buffer).
-    // This requires a Composite Index: status + due_at on Collection Group.
-    const startWindow = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // -7 Days
-    const endWindow = new Date(now.getTime() + 26 * 60 * 60 * 1000); // +26 Hours
-
-    const snapshot = await remindersRef
-        .where("status", "==", "pending")
-        .where("due_at", ">=", startWindow)
-        .where("due_at", "<=", endWindow)
-        .get();
-
-    if (snapshot.empty) return 0;
-
-    // Sort by due_at ASC
-    const sortedDocs = snapshot.docs.sort((a, b) => {
-        const dateA = a.data().due_at?.toDate ? a.data().due_at.toDate() : new Date(a.data().due_at);
-        const dateB = b.data().due_at?.toDate ? b.data().due_at.toDate() : new Date(b.data().due_at);
-        return dateA.getTime() - dateB.getTime();
-    });
-
-    const batch = db.batch();
-    let commitCount = 0;
-    const userCache: Record<string, any> = {};
-
-    for (const doc of sortedDocs) {
-        const reminder = doc.data();
-        const uid = reminder.uid;
-        const dueAt = reminder.due_at?.toDate ? reminder.due_at.toDate() : new Date(reminder.due_at);
-        const notifications = reminder.notifications;
-
-        if (!uid || !notifications || !Array.isArray(notifications)) continue;
-
-        let reminderUpdated = false;
-        const updatedNotifications = [...notifications];
-
-        // Cache user profile for timezone/preferences
-        if (!userCache[uid]) {
-            const userDoc = await db.collection("users").doc(uid).get();
-            userCache[uid] = userDoc.exists ? userDoc.data() : null;
-        }
-        const user = userCache[uid];
-        if (!user) continue;
-
-        // Process each notification trigger
-        for (let i = 0; i < updatedNotifications.length; i++) {
-            const notification = updatedNotifications[i];
-            if (notification.sent) continue;
-
-            const triggerTime = new Date(dueAt.getTime() - notification.offsetMinutes * 60000);
-
-            // Check if trigger time has passed
-            if (triggerTime <= now) {
-                let sent = false;
-                const userTimezone = reminder.timezone || user.timezone || 'UTC';
-                const timeString = formatInTimeZone(dueAt, userTimezone, "h:mm a");
-
-                let prefix = "Reminder:";
-                if (notification.offsetMinutes === 1440) prefix = "Tomorrow:";
-                else if (notification.offsetMinutes === 60) prefix = "In 1 hour:";
-                else if (notification.offsetMinutes === 0) prefix = "Now:";
-
-                const message = `${prefix} "${reminder.title}" is due at ${timeString}.`;
-
-                // SMS
-                if ((notification.type === 'sms' || notification.type === 'both' || notification.type === 'all') && user.smsOptIn && user.phoneNumber && twilioClient) {
-                    try {
-                        await twilioClient.messages.create({
-                            body: message,
-                            from: fromNumber,
-                            to: user.phoneNumber,
-                        });
-                        sent = true;
-                    } catch (e) {
-                        console.error(`SMS failed: ${e}`);
-                    }
-                }
-
-                // Email
-                if ((notification.type === 'email' || notification.type === 'both' || notification.type === 'all') && user.email && transporter) {
-                    try {
-                        await transporter.sendMail({
-                            from: `"Reminders App" <${smtpFrom}>`,
-                            to: user.email,
-                            subject: `${prefix} ${reminder.title}`,
-                            text: message,
-                            html: `<p>${message}</p>`
-                        });
-                        sent = true;
-                    } catch (e) {
-                        console.error(`Email failed: ${e}`);
-                    }
-                }
-
-                // Push
-                if ((notification.type === 'push' || notification.type === 'both' || notification.type === 'all') && publicKey && privateKey) {
-                    try {
-                        const subsRef = db.collection("users").doc(uid).collection("push_subscriptions");
-                        const subsSnapshot = await subsRef.get();
-
-                        if (!subsSnapshot.empty) {
-                            const payload = JSON.stringify({
-                                title: prefix.replace(':', ''),
-                                body: `${reminder.title} is due at ${timeString}`,
-                                url: `/`, // Deep link logic could go here
-                                icon: "/icon-192x192.png"
-                            });
-
-                            const promises = subsSnapshot.docs.map(async (subDoc) => {
-                                const subData = subDoc.data();
-                                try {
-                                    await webpush.sendNotification(
-                                        { endpoint: subData.endpoint, keys: subData.keys } as any,
-                                        payload,
-                                        { headers: { 'Urgency': 'high' } }
-                                    );
-                                    return true;
-                                } catch (err: any) {
-                                    if (err.statusCode === 410 || err.statusCode === 404) {
-                                        await subDoc.ref.delete();
-                                    }
-                                    console.error(`Push failed for ${subDoc.id}:`, err.message);
-                                    return false;
-                                }
-                            });
-                            const results = await Promise.all(promises);
-                            if (results.some(r => r)) sent = true;
-                        }
-                    } catch (e) {
-                        console.error(`Push process failed: ${e}`);
-                    }
-                }
-
-                if (sent) {
-                    updatedNotifications[i].sent = true;
-                    reminderUpdated = true;
-                }
-            }
-        }
-
-        if (reminderUpdated) {
-            batch.update(doc.ref, {
-                notifications: updatedNotifications,
-                updated_at: new Date()
-            });
-            commitCount++;
-        }
-    }
-
-    if (commitCount > 0) await batch.commit();
-    return commitCount;
+/** Truncate notes for push body */
+function truncateNotes(notes: string, maxLen: number = 100): string {
+    if (!notes) return "";
+    return notes.length > maxLen ? notes.substring(0, maxLen) + "…" : notes;
 }
 
-// Helper: Process Repeats (Generation)
-async function processRepeats(futureWindow: Date) {
-    const remindersRef = db.collectionGroup("reminders");
-    const snapshot = await remindersRef.where("generationStatus", "==", "pending").get(); // Requires Index? No, "pending" status usually indexed. But we used "generationStatus" here.
-    // Wait, in previous "process-repeats", we iterated users because of missing index for 'generationStatus'.
-    // BUT we found 'generationStatus' ASC/DESC in `firestore.indexes.json`!
-    // So we CAN use Collection Group query properly now.
-
-    if (snapshot.empty) return 0;
-
-    const batch = db.batch();
-    let generatedCount = 0;
-
-    for (const doc of snapshot.docs) {
-        const reminder = doc.data() as any; // Cast to bypass strict type check for now
-        if (!reminder.repeatRule) continue;
-
-        const currentDue = reminder.due_at; // Timestamp
-        const nextDueParam = calculateNextDue(reminder.repeatRule, currentDue);
-
-        if (!nextDueParam) {
-            batch.update(doc.ref, { generationStatus: 'created' }); // Series ended
-            continue;
-        }
-
-        const nextDueDate = nextDueParam.toDate();
-        if (nextDueDate <= futureWindow) {
-            const newRef = db.collection(`users/${reminder.uid}/reminders`).doc();
-            const now = Timestamp.now();
-
-            const nextReminder = {
-                ...reminder,
-                id: newRef.id,
-                due_at: nextDueParam,
-                status: 'pending',
-                notifications: (reminder.notifications || []).map((n: any) => ({ ...n, sent: false })),
-                originId: doc.id,
-                rootId: reminder.rootId || doc.id,
-                generationStatus: 'pending',
-                created_at: now,
-                updated_at: now,
-            };
-            // Remove ID if destructured
-            delete nextReminder.id; // actually we set ID in doc ref
-
-            batch.set(newRef, nextReminder);
-            batch.update(doc.ref, { generationStatus: 'created' });
-            generatedCount++;
-        }
-    }
-
-    if (generatedCount > 0) await batch.commit();
-    return generatedCount;
-}
-
-// Helper: Process Routines
-async function processRoutines(now: Date) {
-    const routinesRef = db.collectionGroup("routines");
-    const snapshot = await routinesRef.where("active", "==", true).get(); // Requires Index for 'active'? Checked in firestore.indexes.json?
-    // "routines" active ASC/DESC exists in logs.
-
-    if (snapshot.empty) return 0;
-
-    const batch = db.batch();
-    let generatedCount = 0;
-
-    for (const doc of snapshot.docs) {
-        const routine = doc.data() as Routine;
-        const timezone = routine.timezone || 'UTC';
-        const localDate = toZonedTime(now, timezone);
-        const dateStr = format(localDate, "yyyy-MM-dd");
-
-        // Check Last Run
-        if (routine.lastRun) {
-            const lastRunDate = routine.lastRun.toDate();
-            const lastRunLocal = toZonedTime(lastRunDate, timezone);
-            const lastRunDateStr = format(lastRunLocal, "yyyy-MM-dd");
-            if (lastRunDateStr === dateStr) continue;
-        }
-
-        // Generate
-        const newReminders = generateRoutineInstances(routine, localDate);
-        if (newReminders.length > 0) {
-            const userRemindersRef = db.collection(`users/${routine.uid}/reminders`);
-            newReminders.forEach(r => {
-                const ref = userRemindersRef.doc();
-                const dueAtDate = r.due_at ? r.due_at.toDate() : new Date();
-
-                batch.set(ref, {
-                    ...r,
-                    due_at: dueAtDate,
-                    created_at: new Date(),
-                    updated_at: new Date(),
-                    rootId: routine.id,
-                    routineId: routine.id,
-                });
-            });
-
-            batch.update(doc.ref, { lastRun: new Date() }); // Mark ran today
-            generatedCount += newReminders.length;
-        }
-    }
-
-    if (generatedCount > 0) await batch.commit();
-    return generatedCount;
+/** Push subscription cache per cron run */
+const pushSubCache: Record<string, { endpoint: string; keys: any; ref: FirebaseFirestore.DocumentReference }[]> = {};
+async function getCachedPushSubs(uid: string) {
+    if (pushSubCache[uid]) return pushSubCache[uid];
+    const subsSnap = await db.collection("users").doc(uid).collection("push_subscriptions").get();
+    pushSubCache[uid] = subsSnap.docs.map(d => ({
+        endpoint: d.data().endpoint,
+        keys: d.data().keys,
+        ref: d.ref,
+    }));
+    return pushSubCache[uid];
 }
 
 export async function GET(request: NextRequest) {
-    // 1. Authorization
+    // Auth
     const authHeader = request.headers.get("authorization");
-    // Accept Bearer Token OR Query Param (for flexibility with cron services)
     const { searchParams } = new URL(request.url);
     const queryKey = searchParams.get("key");
-
     const validSecret = process.env.CRON_SECRET;
     const isBearerValid = authHeader === `Bearer ${validSecret}`;
     const isQueryValid = queryKey === validSecret;
@@ -335,49 +101,170 @@ export async function GET(request: NextRequest) {
 
     try {
         const now = new Date();
-        const futureWindow = new Date();
-        futureWindow.setDate(futureWindow.getDate() + 14); // Generate next 2 weeks of repeats
 
-        // Run sequentially or concurrently, but capture errors individually
-        let notifResult = { count: 0, error: null };
-        try {
-            notifResult.count = await processReminders(now);
-        } catch (e: any) {
-            console.error("Reminders Check Failed:", e);
-            notifResult.error = e.message;
+        // Get users (2 reads for 2 users)
+        const usersSnap = await db.collection("users").get();
+        if (usersSnap.empty) {
+            return NextResponse.json({ success: true, message: "No users", stats: {} });
         }
 
-        let repeatResult = { count: 0, error: null };
-        try {
-            repeatResult.count = await processRepeats(futureWindow);
-        } catch (e: any) {
-            console.error("Repeats Check Failed:", e);
-            repeatResult.error = e.message;
+        const userCache: Record<string, any> = {};
+        for (const doc of usersSnap.docs) {
+            userCache[doc.id] = doc.data();
         }
 
-        let routineResult = { count: 0, error: null };
-        try {
-            routineResult.count = await processRoutines(now);
-        } catch (e: any) {
-            console.error("Routines Check Failed:", e);
-            routineResult.error = e.message;
+        let totalSent = 0;
+        let totalProcessed = 0;
+        const details: any[] = [];
+
+        for (const uid of Object.keys(userCache)) {
+            const user = userCache[uid];
+
+            // Query due queue items (±2 min window, limit 50)
+            const dueSnap = await getDueQueueItems(uid, now, 2, 50);
+
+            if (dueSnap.empty) continue;
+
+            const batch = db.batch();
+
+            // Group by notificationId + reminderId to avoid duplicate sends
+            const sentKeys = new Set<string>();
+
+            for (const qDoc of dueSnap.docs) {
+                const item = qDoc.data();
+                const dedupeKey = `${item.reminderId}:${item.notificationId}:${item.channel}`;
+
+                if (sentKeys.has(dedupeKey)) {
+                    // Duplicate — just mark sent
+                    batch.update(qDoc.ref, { sent: true });
+                    continue;
+                }
+                sentKeys.add(dedupeKey);
+
+                const dueAt = item.dueAt?.toDate ? item.dueAt.toDate() : new Date(item.dueAt);
+                const tz = item.timezone || user.timezone || "UTC";
+                const timeString = formatInTimeZone(dueAt, tz, "h:mm a");
+                const scheduledAt = item.scheduledAt?.toDate ? item.scheduledAt.toDate() : new Date(item.scheduledAt);
+                const offsetMs = dueAt.getTime() - scheduledAt.getTime();
+                const offsetMin = Math.round(offsetMs / 60000);
+
+                let prefix = "Reminder:";
+                if (offsetMin >= 1440) prefix = "Tomorrow:";
+                else if (offsetMin >= 60) prefix = "In 1 hour:";
+                else if (offsetMin <= 0) prefix = "Now:";
+                else if (offsetMin <= 5) prefix = "In 5 min:";
+                else if (offsetMin <= 15) prefix = "In 15 min:";
+                else if (offsetMin <= 30) prefix = "In 30 min:";
+
+                const title = item.reminderTitle || "Untitled";
+                const notes = truncateNotes(item.reminderNotes || "");
+                const message = `${prefix} "${title}" is due at ${timeString}.`;
+
+                let sent = false;
+
+                try {
+                    if (item.channel === "sms" && user.smsOptIn && user.phoneNumber && twilioClient) {
+                        await twilioClient.messages.create({
+                            body: notes ? `${message}\n${notes}` : message,
+                            from: fromNumber,
+                            to: user.phoneNumber,
+                        });
+                        sent = true;
+                    }
+
+                    if (item.channel === "email" && user.email && transporter) {
+                        await transporter.sendMail({
+                            from: `"Reminders App" <${smtpFrom}>`,
+                            to: user.email,
+                            subject: `${prefix} ${title}`,
+                            text: notes ? `${message}\n\n${notes}` : message,
+                            html: `<p>${message}</p>${notes ? `<p style="color:#666;font-size:14px;">${notes}</p>` : ""}`,
+                        });
+                        sent = true;
+                    }
+
+                    if (item.channel === "push" && publicKey && privateKey) {
+                        const subs = await getCachedPushSubs(uid);
+                        if (subs.length > 0) {
+                            // ── Push body includes notes ──
+                            const bodyParts = [`Due at ${timeString}`];
+                            if (notes) bodyParts.push(notes);
+
+                            const payload = JSON.stringify({
+                                title: `${prefix.replace(":", "")} ${title}`,
+                                body: bodyParts.join(" — "),
+                                url: "/",
+                                icon: "/icon-192x192.png",
+                            });
+
+                            const promises = subs.map(async (sub) => {
+                                try {
+                                    await webpush.sendNotification(
+                                        { endpoint: sub.endpoint, keys: sub.keys } as any,
+                                        payload,
+                                        { headers: { Urgency: "high" } }
+                                    );
+                                    return true;
+                                } catch (err: any) {
+                                    if (err.statusCode === 410 || err.statusCode === 404) {
+                                        await sub.ref.delete();
+                                        pushSubCache[uid] = pushSubCache[uid]?.filter(s => s.endpoint !== sub.endpoint);
+                                    }
+                                    console.error(`Push failed:`, err.message);
+                                    return false;
+                                }
+                            });
+                            const results = await Promise.all(promises);
+                            if (results.some(r => r)) sent = true;
+                        }
+                    }
+                } catch (e: any) {
+                    console.error(`Send failed for ${item.channel}:`, e.message);
+                }
+
+                // Mark queue item as sent (even if send failed, to prevent retry spam)
+                batch.update(qDoc.ref, { sent: true });
+
+                // Also mark the original reminder notification as sent
+                if (sent) {
+                    try {
+                        const reminderRef = db.collection("users").doc(uid)
+                            .collection("reminders").doc(item.reminderId);
+                        // Read the reminder to update its notifications array
+                        const reminderDoc = await reminderRef.get();
+                        if (reminderDoc.exists) {
+                            const rData = reminderDoc.data();
+                            const notifications = rData?.notifications || [];
+                            const idx = notifications.findIndex((n: any) => n.id === item.notificationId);
+                            if (idx >= 0 && !notifications[idx].sent) {
+                                notifications[idx].sent = true;
+                                batch.update(reminderRef, { notifications, updated_at: new Date() });
+                            }
+                        }
+                    } catch (e) {
+                        // Non-critical: queue item is already marked sent
+                        console.error("Failed to update reminder notification state:", e);
+                    }
+                }
+
+                totalProcessed++;
+                if (sent) totalSent++;
+            }
+
+            await batch.commit();
+            details.push({ uid, processed: sentKeys.size });
         }
 
         return NextResponse.json({
-            success: !notifResult.error && !repeatResult.error && !routineResult.error,
+            success: true,
             timestamp: now.toISOString(),
             stats: {
-                notificationsSent: notifResult.count,
-                repeatsGenerated: repeatResult.count,
-                routinesGenerated: routineResult.count
+                totalProcessed,
+                totalSent,
+                usersChecked: Object.keys(userCache).length,
             },
-            errors: {
-                notifications: notifResult.error,
-                repeats: repeatResult.error,
-                routines: routineResult.error
-            }
+            details,
         });
-
     } catch (error: any) {
         console.error("Cron Run Fatal Error:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });

@@ -3,7 +3,7 @@
 import { Reminder } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Circle, Clock, Trash2, MessageSquare, Bell } from "lucide-react";
+import { CheckCircle, Circle, Clock, Trash2, MessageSquare, Bell, Mail } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toggleReminderStatus, deleteReminder } from "@/lib/reminders";
@@ -58,8 +58,9 @@ export const ReminderCard = memo(function ReminderCard({ reminder, onEdit }: Rem
     };
 
     const hasNotifications = reminder.notifications && reminder.notifications.length > 0;
-    const hasSms = hasNotifications && reminder.notifications.some(n => n.type === 'sms' || n.type === 'both');
-    const hasPush = hasNotifications && reminder.notifications.some(n => n.type === 'push' || n.type === 'both');
+    const hasSms = hasNotifications && reminder.notifications.some(n => n.type === 'sms' || n.type === 'both' || n.type === 'all');
+    const hasPush = hasNotifications && reminder.notifications.some(n => n.type === 'push' || n.type === 'both' || n.type === 'all');
+    const hasEmail = hasNotifications && reminder.notifications.some(n => n.type === 'email' || n.type === 'both' || n.type === 'all');
 
     return (
         <Card
@@ -146,6 +147,12 @@ export const ReminderCard = memo(function ReminderCard({ reminder, onEdit }: Rem
                             <span className="flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
                                 <Bell className="h-2.5 w-2.5" />
                                 Push
+                            </span>
+                        )}
+                        {hasEmail && (
+                            <span className="flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                <Mail className="h-2.5 w-2.5" />
+                                Email
                             </span>
                         )}
 

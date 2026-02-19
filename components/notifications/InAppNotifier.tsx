@@ -40,8 +40,8 @@ export function InAppNotifier() {
                     if (triggerTime <= now && !firedRef.current.has(key)) {
                         firedRef.current.add(key);
 
-                        const isPush = notif.type === 'push' || notif.type === 'both';
-                        const isEmail = notif.type === 'email' || notif.type === 'both';
+                        const isPush = notif.type === 'push' || notif.type === 'both' || notif.type === 'all';
+                        const isEmail = notif.type === 'email' || notif.type === 'both' || notif.type === 'all';
 
                         if (isPush) {
                             playNotification();

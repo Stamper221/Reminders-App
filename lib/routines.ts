@@ -5,6 +5,7 @@ import {
     Timestamp, getDoc, getDocs, query, orderBy
 } from "firebase/firestore";
 import { Routine } from "@/lib/types";
+import { removeRoutineQueue } from "@/lib/queueSync";
 
 export const addRoutine = async (uid: string, routine: Omit<Routine, "id" | "created_at" | "updated_at">) => {
     const collectionRef = collection(db, `users/${uid}/routines`);
@@ -25,9 +26,11 @@ export const updateRoutine = async (uid: string, routineId: string, updates: Par
     });
 };
 
-export const deleteRoutine = async (uid: string, routineId: string) => {
+export const deleteRoutine = async (uid: string, routineId: string, deleteFutureReminders: boolean = true) => {
     const docRef = doc(db, `users/${uid}/routines`, routineId);
-    return await deleteDoc(docRef);
+    await deleteDoc(docRef);
+    // Cascade: remove queue items + optionally future generated reminders
+    removeRoutineQueue(routineId, deleteFutureReminders);
 };
 
 export const getRoutines = async (uid: string) => {
