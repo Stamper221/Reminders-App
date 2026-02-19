@@ -130,17 +130,13 @@ export const clearCompletedReminders = async (uid: string) => {
     const snapshot = await getDocs(q);
     if (snapshot.empty) return 0;
 
-    // Firestore batches max 500 writes — split if needed
-    const batchSize = 500;
-    let deleted = 0;
-    for (let i = 0; i < snapshot.docs.length; i += batchSize) {
-        const chunk = snapshot.docs.slice(i, i + batchSize);
-        const batch = writeBatch(db);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-        deleted += chunk.length;
+    // Use deleteDoc in parallel chunks to avoid batch issues
+    const chunkSize = 50;
+    for (let i = 0; i < snapshot.docs.length; i += chunkSize) {
+        const chunk = snapshot.docs.slice(i, i + chunkSize);
+        await Promise.all(chunk.map(d => deleteDoc(d.ref)));
     }
-    return deleted;
+    return snapshot.size;
 };
 
 /**
@@ -151,15 +147,11 @@ export const clearAllReminders = async (uid: string) => {
     const snapshot = await getDocs(collRef);
     if (snapshot.empty) return 0;
 
-    // Firestore batch limit is 500; chunk if needed
-    const chunks = [];
-    for (let i = 0; i < snapshot.docs.length; i += 500) {
-        chunks.push(snapshot.docs.slice(i, i + 500));
-    }
-    for (const chunk of chunks) {
-        const batch = writeBatch(db);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
+    // Use deleteDoc in parallel chunks
+    const chunkSize = 50;
+    for (let i = 0; i < snapshot.docs.length; i += chunkSize) {
+        const chunk = snapshot.docs.slice(i, i + chunkSize);
+        await Promise.all(chunk.map(d => deleteDoc(d.ref)));
     }
     return snapshot.size;
 };
