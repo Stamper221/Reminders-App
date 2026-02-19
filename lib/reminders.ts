@@ -1,11 +1,11 @@
 import { db } from "@/lib/firebase/client";
 import {
     collection, addDoc, updateDoc, deleteDoc, doc,
-    Timestamp, serverTimestamp, query, where, orderBy, onSnapshot
+    Timestamp, serverTimestamp, query, where, orderBy, onSnapshot,
+    getDocs, writeBatch, deleteField
 } from "firebase/firestore";
 import { Reminder, CreateReminderInput, ReminderStatus } from "@/lib/types";
 import { syncReminderQueue, removeReminderQueue } from "@/lib/queueSync";
-import { deleteField } from "firebase/firestore";
 
 const REMINDERS_COLLECTION = (uid: string) => `users/${uid}/reminders`;
 
@@ -125,7 +125,6 @@ export const clearUpcomingReminders = async (uid: string) => {
  * Clears all completed (done) reminders.
  */
 export const clearCompletedReminders = async (uid: string) => {
-    const { getDocs, writeBatch } = await import("firebase/firestore");
     const collRef = collection(db, `users/${uid}/reminders`);
     const q = query(collRef, where("status", "==", "done"));
     const snapshot = await getDocs(q);
@@ -148,7 +147,6 @@ export const clearCompletedReminders = async (uid: string) => {
  * Clears ALL reminders (used from calendar).
  */
 export const clearAllReminders = async (uid: string) => {
-    const { getDocs, writeBatch } = await import("firebase/firestore");
     const collRef = collection(db, `users/${uid}/reminders`);
     const snapshot = await getDocs(collRef);
     if (snapshot.empty) return 0;
@@ -160,7 +158,7 @@ export const clearAllReminders = async (uid: string) => {
     }
     for (const chunk of chunks) {
         const batch = writeBatch(db);
-        chunk.forEach(doc => batch.delete(doc.ref));
+        chunk.forEach(d => batch.delete(d.ref));
         await batch.commit();
     }
     return snapshot.size;
