@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef, us
 import { useAuth } from "@/components/providers/AuthProvider";
 import { db } from "@/lib/firebase/client";
 import { Reminder } from "@/lib/types";
+import { clearCompletedReminders } from "@/lib/reminders";
 import {
     collection, onSnapshot, query, where, orderBy, limit,
     getDocs, startAfter, DocumentSnapshot, QueryDocumentSnapshot, Timestamp
@@ -32,6 +33,8 @@ interface ReminderContextType {
     upcomingReminders: Reminder[];
     /** Get all active reminders (for calendar / notifier) */
     allActiveReminders: Reminder[];
+    /** Clear all completed reminders and update state */
+    clearCompleted: () => Promise<number>;
 }
 
 const ReminderContext = createContext<ReminderContextType>({
@@ -40,11 +43,12 @@ const ReminderContext = createContext<ReminderContextType>({
     loading: true,
     loadingCompleted: false,
     hasMoreCompleted: true,
-    loadMoreCompleted: async () => {},
-    refreshCompleted: () => {},
+    loadMoreCompleted: async () => { },
+    refreshCompleted: () => { },
     todayReminders: [],
     upcomingReminders: [],
     allActiveReminders: [],
+    clearCompleted: async () => 0,
 });
 
 export const useReminders = () => useContext(ReminderContext);
@@ -185,7 +189,20 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
         lastCompletedDocRef.current = null;
         setHasMoreCompleted(true);
         completedLoadedRef.current = false;
-    }, []);
+        loadMoreCompleted();
+    }, [loadMoreCompleted]);
+
+    const clearCompleted = useCallback(async () => {
+        if (!user) return 0;
+        // Optimistic update
+        setCompletedReminders([]);
+        const count = await clearCompletedReminders(user.uid);
+        // Reset pagination state
+        lastCompletedDocRef.current = null;
+        setHasMoreCompleted(true);
+        completedLoadedRef.current = false; // Allow reloading if new completed come in
+        return count;
+    }, [user]);
 
     // When a reminder is toggled to "done", it disappears from the active listener.
     // We could detect this but it's simplest to just let the completed tab re-fetch.
@@ -238,10 +255,12 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
         todayReminders,
         upcomingReminders,
         allActiveReminders,
+        clearCompleted,
     }), [
         reminders, completedReminders, loading, loadingCompleted,
         hasMoreCompleted, loadMoreCompleted, refreshCompleted,
         todayReminders, upcomingReminders, allActiveReminders,
+        clearCompleted,
     ]);
 
     return (

@@ -2,15 +2,16 @@
 
 import { ReminderList } from "@/components/reminders/ReminderList";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { useReminders } from "@/components/providers/ReminderProvider";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Trash2, Loader2 } from "lucide-react";
 import { PageTransition } from "@/components/ui/page-transition";
-import { clearCompletedReminders } from "@/lib/reminders";
 import { toast } from "sonner";
 import { useState } from "react";
 
 export default function CompletedPage() {
     const { user } = useAuth();
+    const { clearCompleted } = useReminders();
     const [clearing, setClearing] = useState(false);
 
     const handleClearCompleted = async () => {
@@ -18,7 +19,7 @@ export default function CompletedPage() {
         if (!confirm("Clear all completed reminders? This cannot be undone.")) return;
         setClearing(true);
         try {
-            const count = await clearCompletedReminders(user.uid);
+            const count = await clearCompleted();
             toast.success(`Cleared ${count} completed reminder${count !== 1 ? 's' : ''}`);
         } catch (error) {
             console.error(error);
