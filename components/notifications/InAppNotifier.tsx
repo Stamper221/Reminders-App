@@ -76,17 +76,8 @@ export function InAppNotifier() {
                             }
                         );
 
-                        // Browser Notification API (visual only, not push)
-                        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-                            try {
-                                new Notification(`${prefix}: ${reminder.title}`, {
-                                    body: `Due at ${dueAt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`,
-                                    icon: "/icon-192x192.png",
-                                });
-                            } catch (e) {
-                                // Notification API may fail on some mobile browsers
-                            }
-                        }
+                        // System push notifications are handled exclusively by the server (Web Push)
+                        // to prevent duplicate notifications.
                     }
                 }
             }

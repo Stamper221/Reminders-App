@@ -137,9 +137,17 @@ export async function POST(request: NextRequest) {
                 const dueAtPush = reminder?.due_at?.toDate ? reminder.due_at.toDate() : new Date(reminder?.due_at);
                 const pushTimezone = reminder?.timezone || userData?.timezone || 'UTC';
                 const pushTimeStr = formatInTimeZone(dueAtPush, pushTimezone, "h:mm a");
+
+                const notesRaw = reminder?.notes || "";
+                const maxLen = 100;
+                const notes = notesRaw.length > maxLen ? notesRaw.substring(0, maxLen) + "…" : notesRaw;
+
+                const bodyParts = [`Due at ${pushTimeStr}`];
+                if (notes) bodyParts.push(notes);
+
                 const payload = JSON.stringify({
                     title: `Reminder: ${reminder?.title}`,
-                    body: reminder?.notes || `Due: ${pushTimeStr}`,
+                    body: bodyParts.join(" — "),
                     url: `/?reminderId=${reminderId}`,
                     icon: "/icon-192x192.png"
                 });
