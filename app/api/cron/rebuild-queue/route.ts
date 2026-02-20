@@ -89,11 +89,12 @@ export async function POST(request: NextRequest) {
             let routinesGenerated = 0;
             try {
                 const routinesSnap = await db.collection("users").doc(uid).collection("routines")
-                    .where("active", "==", true).get();
+                    .get();
+                const activeRoutineDocs = routinesSnap.docs.filter(d => d.data().active === true);
 
-                if (!routinesSnap.empty) {
+                if (activeRoutineDocs.length > 0) {
                     const batch = db.batch();
-                    for (const rDoc of routinesSnap.docs) {
+                    for (const rDoc of activeRoutineDocs) {
                         const routine = rDoc.data() as Routine;
                         const localDate = toZonedTime(now, routine.timezone || userTimezone);
                         const dateStr = format(localDate, "yyyy-MM-dd");

@@ -65,19 +65,20 @@ export async function generateRoutinesForUser(
         details: [],
     };
 
-    // 1. Fetch only ENABLED routines
-    const routinesSnap = await db
+    // Fetch all routines and filter for active in-memory
+    // (avoids FAILED_PRECONDITION when Collection-scope index is missing)
+    const allRoutinesSnap = await db
         .collection("users").doc(uid).collection("routines")
-        .where("active", "==", true)
         .get();
 
-    if (routinesSnap.empty) return result;
+    const activeRoutines = allRoutinesSnap.docs.filter(d => d.data().active === true);
+    if (activeRoutines.length === 0) return result;
 
     const remindersRef = db.collection(`users/${uid}/reminders`);
     const batch = db.batch();
     const createdReminderIds: string[] = [];
 
-    for (const rDoc of routinesSnap.docs) {
+    for (const rDoc of activeRoutines) {
         const routine = rDoc.data();
         const routineId = rDoc.id;
         const timezone = routine.timezone || userTz;
