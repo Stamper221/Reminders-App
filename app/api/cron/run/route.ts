@@ -5,7 +5,9 @@ import twilio from "twilio";
 import nodemailer from "nodemailer";
 import { formatInTimeZone } from "date-fns-tz";
 import webpush from "web-push";
-import { getDueQueueItems } from "@/lib/notificationQueue";
+import { getDueQueueItems, rebuildQueueForUser } from "@/lib/notificationQueue";
+import { generateRoutinesForUser } from "@/lib/routineGenerator";
+import { format } from "date-fns";
 
 /**
  * GET /api/cron/run
@@ -116,9 +118,38 @@ export async function GET(request: NextRequest) {
         let totalSent = 0;
         let totalProcessed = 0;
         const details: any[] = [];
+        const routineStats: any[] = [];
 
         for (const uid of Object.keys(userCache)) {
             const user = userCache[uid];
+            const userTimezone = user.timezone || "UTC";
+
+            // ── Step 0: Daily routine generation (once per day per user) ──
+            try {
+                const todayStr = format(now, "yyyy-MM-dd");
+                const metaRef = db.collection("users").doc(uid).collection("meta").doc("routineGenState");
+                const metaDoc = await metaRef.get();
+                const lastGenDate = metaDoc.exists ? metaDoc.data()?.lastGenDate : null;
+
+                if (lastGenDate !== todayStr) {
+                    // Generate routine reminders for next 24h
+                    const genResult = await generateRoutinesForUser(uid, now, userTimezone);
+
+                    // Rebuild notification queue (covers new routine reminders + existing ones)
+                    const queueResult = await rebuildQueueForUser(uid, 24);
+
+                    // Mark as generated for today
+                    await metaRef.set({ lastGenDate: todayStr, generatedAt: now }, { merge: true });
+
+                    routineStats.push({
+                        uid,
+                        ...genResult,
+                        queueRebuilt: queueResult.queued,
+                    });
+                }
+            } catch (e: any) {
+                console.error(`[Cron] Routine generation failed for ${uid}:`, e.message);
+            }
 
             // Query due queue items (±2 min window, limit 50)
             const dueSnap = await getDueQueueItems(uid, now, 2, 50);
@@ -263,6 +294,7 @@ export async function GET(request: NextRequest) {
                 totalSent,
                 usersChecked: Object.keys(userCache).length,
             },
+            routineGeneration: routineStats,
             details,
         });
     } catch (error: any) {

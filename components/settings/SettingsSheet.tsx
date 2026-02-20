@@ -13,7 +13,7 @@ import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
-import { Loader2, Settings, Phone, MessageSquare, Globe, Wrench, Music, Headphones, VolumeX, Volume2, Bell, Mail, Palette } from "lucide-react";
+import { Loader2, Settings, Phone, MessageSquare, Globe, Wrench, Music, Headphones, VolumeX, Volume2, Bell, Mail, Palette, Clock } from "lucide-react";
 import { useSound } from "@/components/providers/SoundProvider";
 import { PushNotificationManager } from "./PushNotificationManager";
 import { ConnectedDevices } from "./ConnectedDevices";
@@ -398,6 +398,68 @@ export function SettingsSheet() {
                             >
                                 Trigger Push
                             </Button>
+                        </div>
+
+                        {/* Simulate Routine Run */}
+                        <div className="rounded-xl border bg-card p-4">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+                                    <Clock className="h-4 w-4 text-green-500" />
+                                </div>
+                                <div>
+                                    <span className="text-sm font-medium block">Simulate Routine Run</span>
+                                    <span className="text-[11px] text-muted-foreground">Generate routine reminders as if &quot;now&quot; = chosen time</span>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Input
+                                    type="datetime-local"
+                                    id="simulateTime"
+                                    defaultValue={new Date().toISOString().slice(0, 16)}
+                                    className="text-sm"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    className="w-full cursor-pointer h-9"
+                                    onClick={async (e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        try {
+                                            if (!user) throw new Error("Not authenticated");
+                                            const token = await user.getIdToken();
+                                            const input = document.getElementById("simulateTime") as HTMLInputElement;
+                                            const simulateTime = input?.value ? new Date(input.value).toISOString() : new Date().toISOString();
+                                            toast.promise(
+                                                fetch("/api/routines/simulate", {
+                                                    method: "POST",
+                                                    headers: {
+                                                        "Content-Type": "application/json",
+                                                        "Authorization": `Bearer ${token}`,
+                                                    },
+                                                    body: JSON.stringify({ simulateTime }),
+                                                }).then(async (res) => {
+                                                    const data = await res.json();
+                                                    if (!res.ok) throw new Error(data.error || "Failed");
+                                                    return data;
+                                                }),
+                                                {
+                                                    loading: 'Running routine generator...',
+                                                    success: (data: any) => {
+                                                        const g = data.generation;
+                                                        return `Generated ${g.remindersCreated} reminders from ${g.routinesProcessed} routines. Queue: ${data.queueRebuilt} items.`;
+                                                    },
+                                                    error: (err: any) => `Failed: ${err.message}`
+                                                }
+                                            );
+                                        } catch (err: any) {
+                                            toast.error(err.message);
+                                        }
+                                    }}
+                                >
+                                    Run Simulation
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </details>
