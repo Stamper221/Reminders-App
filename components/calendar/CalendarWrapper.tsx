@@ -17,7 +17,7 @@ export function CalendarWrapper() {
     const { user } = useAuth();
     const { openEdit, openNew } = useReminderModal();
     // Use shared data from the centralized provider — NO separate listener
-    const { reminders: activeReminders, completedReminders, loading } = useReminders();
+    const { reminders: activeReminders, completedReminders, loading, expandWindowTo } = useReminders();
 
     // Merge active + completed for calendar display
     const allReminders = useMemo(() => {
@@ -109,6 +109,10 @@ export function CalendarWrapper() {
                 height="100%"
                 dateClick={(info) => {
                     openNew();
+                }}
+                datesSet={(arg) => {
+                    // Automatically request more data if the calendar scrolls into the future
+                    expandWindowTo(arg.end);
                 }}
             />
         </div>

@@ -38,6 +38,7 @@ interface ReminderContextType {
     clearCompleted: () => Promise<number>;
     /** Optimistically delete a single completed reminder */
     deleteCompletedItem: (id: string) => Promise<void>;
+    expandWindowTo: (date: Date) => void;
 }
 
 const ReminderContext = createContext<ReminderContextType>({
@@ -53,6 +54,7 @@ const ReminderContext = createContext<ReminderContextType>({
     allActiveReminders: [],
     clearCompleted: async () => 0,
     deleteCompletedItem: async () => { },
+    expandWindowTo: () => { },
 });
 
 export const useReminders = () => useContext(ReminderContext);
@@ -80,6 +82,24 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     const [reminders, setReminders] = useState<Reminder[]>([]);
     const [loading, setLoading] = useState(true);
 
+    // ── Dynamic Date Window (Real-time listener limit) ──
+    const [windowEnd, setWindowEnd] = useState<Date>(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 60); // Default 60 days forward
+        return d;
+    });
+
+    const expandWindowTo = useCallback((date: Date) => {
+        setWindowEnd(prev => {
+            if (date > prev) {
+                const next = new Date(date);
+                next.setDate(next.getDate() + 14); // Buffer an extra 14 days to prevent constant reloading
+                return next;
+            }
+            return prev;
+        });
+    }, []);
+
     // ── Completed reminders (on-demand, paginated) ──
     const [completedReminders, setCompletedReminders] = useState<Reminder[]>([]);
     const [loadingCompleted, setLoadingCompleted] = useState(false);
@@ -100,16 +120,16 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
 
         const remindersRef = collection(db, "users", user.uid, "reminders");
 
-        // Query: only pending/snoozed, ordered by due date
-        // This avoids loading completed reminders into the real-time listener
+        // Query: only pending/snoozed, bounded by due date <= windowEnd to limit reads
         const q = query(
             remindersRef,
             where("status", "in", ["pending", "snoozed"]),
+            where("due_at", "<=", Timestamp.fromDate(windowEnd)),
             orderBy("due_at", "asc")
         );
 
         if (process.env.NODE_ENV === "development") {
-            console.log("[ReminderProvider] Attaching single listener for pending/snoozed reminders");
+            console.log(`[ReminderProvider] Attaching listener (bounded to ${windowEnd.toISOString().split('T')[0]})`);
         }
 
         const unsubscribe = onSnapshot(
@@ -137,7 +157,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
             }
             unsubscribe();
         };
-    }, [user]); // Only re-attach when user changes (login/logout)
+    }, [user, windowEnd.getTime()]); // Re-attach when window expands
 
     // ═══════════════════════════════════════════════════════════════════════
     // COMPLETED REMINDERS — On-demand, paginated getDocs
@@ -276,11 +296,12 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
         allActiveReminders,
         clearCompleted,
         deleteCompletedItem,
+        expandWindowTo,
     }), [
         reminders, completedReminders, loading, loadingCompleted,
         hasMoreCompleted, loadMoreCompleted, refreshCompleted,
         todayReminders, upcomingReminders, allActiveReminders,
-        clearCompleted,
+        clearCompleted, expandWindowTo
     ]);
 
     return (
