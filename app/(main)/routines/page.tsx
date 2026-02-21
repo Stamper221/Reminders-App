@@ -21,7 +21,9 @@ export default function RoutinesPage() {
     const [loading, setLoading] = useState(routinesCache === null);
 
     useEffect(() => {
-        if (user) loadRoutines();
+        if (user && routinesCache === null) {
+            loadRoutines();
+        }
     }, [user]);
 
     const loadRoutines = async () => {

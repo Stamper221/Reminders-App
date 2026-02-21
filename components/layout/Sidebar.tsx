@@ -18,7 +18,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { auth } from "@/lib/firebase/client";
-import { signOut } from "firebase/auth";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useSettingsModal } from "@/components/providers/SettingsModalProvider";
@@ -32,14 +31,13 @@ export function Sidebar({ className }: SidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
     const { openSettings } = useSettingsModal();
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     const { collapsed, toggle } = useSidebar();
 
     const handleLogout = async () => {
         try {
-            await signOut(auth);
+            await logout();
             toast.success("Logged out");
-            router.push("/login");
         } catch (error) {
             toast.error("Error logging out");
         }

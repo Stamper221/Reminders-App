@@ -6,9 +6,10 @@ import { db } from "@/lib/firebase/client";
 import { Reminder } from "@/lib/types";
 import { clearCompletedReminders, deleteReminder } from "@/lib/reminders";
 import {
-    collection, onSnapshot, query, where, orderBy, limit,
-    getDocs, startAfter, DocumentSnapshot, QueryDocumentSnapshot, Timestamp
+    collection, query, where, orderBy, limit,
+    startAfter, DocumentSnapshot, QueryDocumentSnapshot, Timestamp
 } from "firebase/firestore";
+import { onSnapshot, getDocs } from "@/lib/firebase/inspector";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

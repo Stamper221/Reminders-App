@@ -1,9 +1,9 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { onAuthStateChanged, User, signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/client";
-import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, Timestamp, clearIndexedDbPersistence, terminate } from "firebase/firestore";
 import { UserProfile } from "@/lib/types";
 import { useRouter, usePathname } from "next/navigation";
 
@@ -11,12 +11,14 @@ interface AuthContextType {
     user: User | null;
     profile: UserProfile | null;
     loading: boolean;
+    logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
     user: null,
     profile: null,
     loading: true,
+    logout: async () => { },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -85,8 +87,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
     }, []);
 
+    const logout = async () => {
+        try {
+            // First stop any active network operations
+            try {
+                await terminate(db);
+                // Clear the persistence to ensure the next user on this device sees a fresh state
+                // and previous user's data isn't leaked into IndexedDB.
+                await clearIndexedDbPersistence(db);
+                console.log("AuthProvider: Local persistence cleared");
+            } catch (e) {
+                console.warn("AuthProvider: Failed to clear persistence (it might already be cleared or not initialized)", e);
+            }
+
+            await signOut(auth);
+            router.push("/login");
+        } catch (error) {
+            console.error("AuthProvider: Logout failed", error);
+            throw error;
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ user, profile, loading }}>
+        <AuthContext.Provider value={{ user, profile, loading, logout }}>
             {children}
         </AuthContext.Provider>
     );
