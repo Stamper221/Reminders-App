@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef, us
 import { useAuth } from "@/components/providers/AuthProvider";
 import { db } from "@/lib/firebase/client";
 import { Reminder } from "@/lib/types";
-import { clearCompletedReminders } from "@/lib/reminders";
+import { clearCompletedReminders, deleteReminder } from "@/lib/reminders";
 import {
     collection, onSnapshot, query, where, orderBy, limit,
     getDocs, startAfter, DocumentSnapshot, QueryDocumentSnapshot, Timestamp
@@ -35,6 +35,8 @@ interface ReminderContextType {
     allActiveReminders: Reminder[];
     /** Clear all completed reminders and update state */
     clearCompleted: () => Promise<number>;
+    /** Optimistically delete a single completed reminder */
+    deleteCompletedItem: (id: string) => Promise<void>;
 }
 
 const ReminderContext = createContext<ReminderContextType>({
@@ -49,6 +51,7 @@ const ReminderContext = createContext<ReminderContextType>({
     upcomingReminders: [],
     allActiveReminders: [],
     clearCompleted: async () => 0,
+    deleteCompletedItem: async () => { },
 });
 
 export const useReminders = () => useContext(ReminderContext);
@@ -204,6 +207,21 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
         return count;
     }, [user]);
 
+    const deleteCompletedItem = useCallback(async (id: string) => {
+        if (!user) return;
+        // Optimistic update
+        setCompletedReminders(prev => prev.filter(r => r.id !== id));
+        try {
+            await deleteReminder(user.uid, id);
+        } catch (error) {
+            // In a more robust app we could rollback the state here,
+            // but for now a simple refresh or just letting it be is fine.
+            console.error("Optimistic delete failed:", error);
+            refreshCompleted(); // Rollback by fetching from source
+            throw error;
+        }
+    }, [user, refreshCompleted]);
+
     // When a reminder is toggled to "done", it disappears from the active listener.
     // We could detect this but it's simplest to just let the completed tab re-fetch.
     // The active listener handles all transitions automatically.
@@ -256,6 +274,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
         upcomingReminders,
         allActiveReminders,
         clearCompleted,
+        deleteCompletedItem,
     }), [
         reminders, completedReminders, loading, loadingCompleted,
         hasMoreCompleted, loadMoreCompleted, refreshCompleted,

@@ -148,7 +148,7 @@ export default function RoutinesPage() {
                             <div
                                 key={routine.id}
                                 className={cn(
-                                    "group relative overflow-hidden rounded-xl border bg-card p-5 transition-shadow hover:shadow-lg",
+                                    "group relative overflow-hidden rounded-xl glass text-card-foreground card-shadow p-5 transition-all duration-200 hover:-translate-y-0.5 hover:card-shadow-hover",
                                     !routine.active && "opacity-75 grayscale-[0.5]"
                                 )}
                             >

@@ -299,6 +299,18 @@ export function RoutineEditor({ initialData, mode }: RoutineEditorProps) {
                                         value={stepForm.notes || ""}
                                         onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setStepForm({ ...stepForm, notes: e.target.value })}
                                         placeholder="Details..."
+                                        className="min-h-[44px] h-[44px] resize-none overflow-hidden"
+                                        onInput={(e) => {
+                                            const target = e.target as HTMLTextAreaElement;
+                                            target.style.height = '44px';
+                                            target.style.height = `${target.scrollHeight}px`;
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleStepSave();
+                                            }
+                                        }}
                                     />
                                 </div>
 

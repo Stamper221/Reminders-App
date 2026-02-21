@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useState, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSound } from "@/components/providers/SoundProvider";
+import { useReminders } from "@/components/providers/ReminderProvider";
 
 interface ReminderCardProps {
     reminder: Reminder;
@@ -22,6 +23,7 @@ export const ReminderCard = memo(function ReminderCard({ reminder, onEdit }: Rem
     const [justCompleted, setJustCompleted] = useState(false);
     const [notesExpanded, setNotesExpanded] = useState(false);
     const { playSuccess } = useSound();
+    const { deleteCompletedItem } = useReminders();
 
     const dueDate = reminder.due_at.toDate();
     const isOverdue = isPast(dueDate) && reminder.status === 'pending';
@@ -48,7 +50,11 @@ export const ReminderCard = memo(function ReminderCard({ reminder, onEdit }: Rem
         e.stopPropagation();
         if (!confirm("Delete this reminder?")) return;
         try {
-            await deleteReminder(reminder.uid, reminder.id!);
+            if (reminder.status === 'done') {
+                await deleteCompletedItem(reminder.id!);
+            } else {
+                await deleteReminder(reminder.uid, reminder.id!);
+            }
             toast.success("Reminder deleted");
         } catch (error) {
             toast.error("Failed to delete reminder");

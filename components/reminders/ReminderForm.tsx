@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -21,6 +22,7 @@ import { toast } from "sonner";
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from "framer-motion";
 import { RepeatRuleSelector } from "./RepeatRuleSelector";
+import { syncReminderQueue } from "@/lib/queueSync";
 
 const schema = z.object({
     title: z.string().min(1, "Title is required"),
@@ -138,12 +140,20 @@ export function ReminderForm({ initialData, onSuccess }: ReminderFormProps) {
             }
 
             if (initialData && initialData.id) {
+                const initialDate = initialData.due_at?.toDate ? initialData.due_at.toDate() : new Date(initialData.due_at as any);
+                const timeChanged = dueAt.getTime() !== initialDate.getTime();
+
+                // If time changed, reset sent status on all notifications so they trigger again
+                const finalNotifications = timeChanged
+                    ? notifications.map(n => ({ ...n, sent: false }))
+                    : notifications;
+
                 const updatePayload: Record<string, any> = {
                     title: data.title,
                     notes: data.notes || '',
                     due_at: dueAt as any,
                     timezone: payload.timezone,
-                    notifications: notifications as any,
+                    notifications: finalNotifications as any,
                 };
                 if (repeatRule) {
                     updatePayload.repeatRule = repeatRule;
@@ -173,6 +183,11 @@ export function ReminderForm({ initialData, onSuccess }: ReminderFormProps) {
                     } catch (e) {
                         console.warn("Failed to clean up repeat instances:", e);
                     }
+                }
+
+                if (timeChanged || !repeatRule) {
+                    // Sync the new queue items
+                    syncReminderQueue(initialData.id);
                 }
 
                 toast.success("Reminder updated");
@@ -245,7 +260,23 @@ export function ReminderForm({ initialData, onSuccess }: ReminderFormProps) {
                     <FileText className="h-3.5 w-3.5" />
                     <Label htmlFor="notes" className="text-xs font-semibold uppercase tracking-wider">Notes</Label>
                 </div>
-                <Input id="notes" placeholder="Add details..." {...register("notes")} />
+                <Textarea
+                    id="notes"
+                    placeholder="Add details..."
+                    {...register("notes")}
+                    className="min-h-[44px] h-[44px] resize-none overflow-hidden"
+                    onInput={(e) => {
+                        const target = e.target as HTMLTextAreaElement;
+                        target.style.height = '44px';
+                        target.style.height = `${target.scrollHeight}px`;
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSubmit(onSubmit)();
+                        }
+                    }}
+                />
             </div>
 
             {/* Date & Time */}
