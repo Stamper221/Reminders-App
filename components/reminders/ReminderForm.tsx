@@ -270,12 +270,6 @@ export function ReminderForm({ initialData, onSuccess }: ReminderFormProps) {
                         target.style.height = '44px';
                         target.style.height = `${target.scrollHeight}px`;
                     }}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSubmit(onSubmit)();
-                        }
-                    }}
                 />
             </div>
 
