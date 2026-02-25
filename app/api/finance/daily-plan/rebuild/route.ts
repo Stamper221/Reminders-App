@@ -96,6 +96,30 @@ export async function POST(req: NextRequest) {
         // Carryover logic disabled per user request
         const carryOver = 0;
 
+        // Calculate today's spent amount from manual transactions
+        let spentTodayDetected = 0;
+        try {
+            const startOfDay = new Date(todayStr);
+            startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date(todayStr);
+            endOfDay.setHours(23, 59, 59, 999);
+
+            const transactionsSnap = await adminDb.collection(`users/${uid}/finance_transactions`)
+                .where("uid", "==", uid)
+                .where("date", ">=", startOfDay)
+                .where("date", "<=", endOfDay)
+                .get();
+
+            transactionsSnap.docs.forEach(d => {
+                const tx = d.data();
+                if (tx.direction === 'expense') {
+                    spentTodayDetected += (tx.amount || 0);
+                }
+            });
+        } catch (te) {
+            console.error("Failed to sum manual transactions for rebuild:", te);
+        }
+
         const planRef = adminDb.doc(`users/${uid}/finance_daily_plan/${todayStr}`);
 
         await planRef.set({
@@ -103,14 +127,14 @@ export async function POST(req: NextRequest) {
             dateStr: todayStr,
             allowedSpend: finalDailyAllowance,
             carryOver,
-            fixedBillsToday: 0, // Simplified; in a real app, query `finance_recurring` for dates matching today
+            fixedBillsToday: 0,
             reservedSavingsToday: requiredSavingsToday,
-            spentToday: 0,
+            spentToday: spentTodayDetected, // Use correctly calculated value
             baselineIncome,
             predictedBills,
             dailyBaselineAllowance,
             updatedAt: new Date()
-        }, { merge: true }); // merge to not overwrite spentToday if rebuilding mid-day
+        }, { merge: true });
 
         return NextResponse.json({ success: true, date: todayStr, allowed: finalDailyAllowance, carryOver });
 

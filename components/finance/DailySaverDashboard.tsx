@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { doc, getDoc, setDoc, query, collection, where, limit, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, query, collection, where, limit, onSnapshot, serverTimestamp, updateDoc, addDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { FinanceDailyPlan, FinanceGoal } from "@/lib/financeTypes";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { motion, AnimatePresence } from "framer-motion";
-import { TrendingDown, TrendingUp, Trophy, Flame, Target, Plus, AlertCircle, RefreshCw, Wallet, Calendar as CalendarIcon, ArrowRight } from "lucide-react";
+import { TrendingDown, TrendingUp, Trophy, Flame, Target, Plus, AlertCircle, RefreshCw, Wallet, Calendar as CalendarIcon, ArrowRight, Trash2, History, XCircle, FileText } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +32,8 @@ export function DailySaverDashboard() {
     // Predictor States
     const [predictionBalance, setPredictionBalance] = useState("1000");
     const [predictionDate, setPredictionDate] = useState<Date | undefined>(addDays(new Date(), 30));
+    const [expenseDescription, setExpenseDescription] = useState("");
+    const [dailyManualTransactions, setDailyManualTransactions] = useState<any[]>([]);
 
     // UI states for Gamification
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -42,6 +44,7 @@ export function DailySaverDashboard() {
         // Combine Goal and Plan subscriptions
         let unsubGoal = () => { };
         let unsubPlan = () => { };
+        let unsubManualTxs = () => { };
 
         const fetchInitial = async () => {
             // Goals
@@ -74,6 +77,26 @@ export function DailySaverDashboard() {
                     setLoading(false);
                 }
             });
+
+            // Today's Manual Transactions for the "Quick Log" list
+            const manualTxsRef = collection(db, `users/${user.uid}/finance_transactions`);
+            const mTxsQ = query(
+                manualTxsRef,
+                where("uid", "==", user.uid),
+                where("isManual", "==", true),
+                where("date", ">=", new Date(new Date().setHours(0, 0, 0, 0))),
+                where("date", "<=", new Date(new Date().setHours(23, 59, 59, 999)))
+            );
+            unsubManualTxs = onSnapshot(mTxsQ, (snap) => {
+                const txs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                // Sort by date descending
+                txs.sort((a: any, b: any) => {
+                    const tA = a.date?.toMillis ? a.date.toMillis() : (a.date?._seconds * 1000 || 0);
+                    const tB = b.date?.toMillis ? b.date.toMillis() : (b.date?._seconds * 1000 || 0);
+                    return tB - tA;
+                });
+                setDailyManualTransactions(txs);
+            });
         };
 
         fetchInitial();
@@ -81,6 +104,7 @@ export function DailySaverDashboard() {
         return () => {
             unsubGoal();
             unsubPlan();
+            unsubManualTxs();
         };
 
     }, [user, todayStr]);
@@ -124,17 +148,100 @@ export function DailySaverDashboard() {
             return;
         }
 
+        const desc = expenseDescription.trim() || "Manual Expense";
+
         try {
+            // 1. Create a real transaction record
+            await addDoc(collection(db, `users/${user.uid}/finance_transactions`), {
+                uid: user.uid,
+                merchant: desc,
+                originalDescription: desc,
+                amount: val,
+                date: serverTimestamp(),
+                direction: 'expense',
+                category: 'Manual',
+                isManual: true,
+                statementId: 'manual',
+                dedupeKey: `manual_${Date.now()}_${val}`
+            });
+
+            // 2. Update the daily plan spentToday (for immediate UI response)
             await updateDoc(doc(db, `users/${user.uid}/finance_daily_plan/${plan.id}`), {
                 spentToday: plan.spentToday + val
             });
+
             setIsAddingExpense(false);
             setExpenseAmount("");
+            setExpenseDescription("");
             toast.success("Expense logged!");
+
+            // Trigger global recalculate in background to update Insights tab
+            fetch('/api/finance/recalculate', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${await user.getIdToken()}` }
+            }).catch(e => console.error("Background sync failed:", e));
+
         } catch (e) {
+            console.error("Log error:", e);
             toast.error("Failed to log expense");
         }
     }
+
+    const handleDeleteExpense = async (txId: string, amount: number) => {
+        if (!user || !plan) return;
+        const confirmDelete = window.confirm("Delete this expense?");
+        if (!confirmDelete) return;
+
+        try {
+            const batch = writeBatch(db);
+            // 1. Delete the transaction
+            batch.delete(doc(db, `users/${user.uid}/finance_transactions/${txId}`));
+            // 2. Update the daily plan
+            batch.update(doc(db, `users/${user.uid}/finance_daily_plan/${plan.id}`), {
+                spentToday: Math.max(0, plan.spentToday - amount)
+            });
+            await batch.commit();
+            toast.success("Expense removed");
+
+            // Trigger global recalculate in background
+            fetch('/api/finance/recalculate', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${await user.getIdToken()}` }
+            }).catch(e => console.error("Background sync failed:", e));
+        } catch (e) {
+            toast.error("Failed to delete expense");
+        }
+    };
+
+    const handleClearAllExpenses = async () => {
+        if (!user || !plan || dailyManualTransactions.length === 0) return;
+        const confirmClear = window.confirm(`Clear all ${dailyManualTransactions.length} manual expenses for today?`);
+        if (!confirmClear) return;
+
+        try {
+            const batch = writeBatch(db);
+            let totalManualSpent = 0;
+            dailyManualTransactions.forEach(tx => {
+                totalManualSpent += tx.amount;
+                batch.delete(doc(db, `users/${user.uid}/finance_transactions/${tx.id}`));
+            });
+
+            batch.update(doc(db, `users/${user.uid}/finance_daily_plan/${plan.id}`), {
+                spentToday: Math.max(0, plan.spentToday - totalManualSpent)
+            });
+
+            await batch.commit();
+            toast.success("Cleared all manual expenses");
+
+            // Trigger global recalculate in background
+            fetch('/api/finance/recalculate', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${await user.getIdToken()}` }
+            }).catch(e => console.error("Background sync failed:", e));
+        } catch (e) {
+            toast.error("Failed to clear expenses");
+        }
+    };
 
 
     if (loading) {
@@ -227,6 +334,59 @@ export function DailySaverDashboard() {
                                 {plan!.carryOver > 0 && <span className="text-green-500">+$ {plan!.carryOver.toFixed(0)} Carryover Budget</span>}
                             </div>
                         </div>
+                    </CardContent>
+                </Card>
+
+                {/* Today's Manual Log List */}
+                <Card className="glass border-border/50 md:col-span-2 overflow-hidden flex flex-col min-h-[300px]">
+                    <CardHeader className="pb-2 flex flex-row items-center justify-between border-b border-border/10 bg-muted/20">
+                        <div>
+                            <CardTitle className="text-sm font-bold flex items-center gap-2">
+                                <History className="h-4 w-4 text-primary" />
+                                Today's Manual Entries
+                            </CardTitle>
+                        </div>
+                        {dailyManualTransactions.length > 0 && (
+                            <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-red-400" onClick={handleClearAllExpenses}>
+                                <XCircle className="h-3 w-3 mr-1" /> Clear All
+                            </Button>
+                        )}
+                    </CardHeader>
+                    <CardContent className="p-0 flex-1 overflow-y-auto max-h-[350px]">
+                        {dailyManualTransactions.length === 0 ? (
+                            <div className="p-16 text-center text-muted-foreground flex flex-col items-center justify-center h-full">
+                                <FileText className="h-10 w-10 mb-3 opacity-20" />
+                                <p className="text-sm font-medium">No manual expenses logged today</p>
+                                <p className="text-[10px] opacity-60 mt-1 max-w-[200px]">Click Quick Log to deduct coffee, transport, or small daily costs.</p>
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-border/10">
+                                {dailyManualTransactions.map((tx) => (
+                                    <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors group">
+                                        <div className="flex flex-col">
+                                            <span className="font-bold text-sm leading-tight text-foreground">{tx.merchant}</span>
+                                            <span className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider mt-0.5">
+                                                {(() => {
+                                                    const d = tx.date?.toDate ? tx.date.toDate() : (tx.date?._seconds ? new Date(tx.date._seconds * 1000) : new Date());
+                                                    return format(d, 'h:mm a');
+                                                })()}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <span className="font-mono font-black text-red-500 text-lg">-${tx.amount.toFixed(2)}</span>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                                onClick={() => handleDeleteExpense(tx.id, tx.amount)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -360,15 +520,31 @@ export function DailySaverDashboard() {
                             Deduct an amount from today's allowance.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="py-4">
-                        <Input
-                            type="number"
-                            placeholder="0.00"
-                            className="text-4xl h-20 text-center font-bold"
-                            value={expenseAmount}
-                            onChange={(e) => setExpenseAmount(e.target.value)}
-                            autoFocus
-                        />
+                    <div className="space-y-6 py-6">
+                        <div className="space-y-2 text-center">
+                            <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Amount to log</label>
+                            <Input
+                                type="number"
+                                placeholder="0.00"
+                                className="text-5xl h-24 text-center font-black border-none bg-transparent focus-visible:ring-0"
+                                value={expenseAmount}
+                                onChange={(e) => setExpenseAmount(e.target.value)}
+                                autoFocus
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest pl-1">Description (Optional)</label>
+                            <div className="relative">
+                                <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="e.g. Coffee, Bus fare, Gym..."
+                                    className="pl-10 h-12 bg-muted/30 rounded-xl"
+                                    value={expenseDescription}
+                                    onChange={(e) => setExpenseDescription(e.target.value)}
+                                />
+                            </div>
+                        </div>
                     </div>
                     <div className="flex justify-end gap-3">
                         <Button variant="ghost" onClick={() => setIsAddingExpense(false)}>Cancel</Button>
