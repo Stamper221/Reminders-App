@@ -17,6 +17,9 @@ export async function POST(req: NextRequest) {
         const uid = body.uid;
         if (!uid) return NextResponse.json({ error: "Missing uid" }, { status: 400 });
 
+        // Small delay for write consistency if called immediately after adding a goal
+        await new Promise(resolve => setTimeout(resolve, 800));
+
         const todayStr = body.dateStr || format(new Date(), 'yyyy-MM-dd');
         const goalId = body.goalId;
 
@@ -51,6 +54,18 @@ export async function POST(req: NextRequest) {
             goal = sortedGoals[0];
         }
 
+        // Robust timestamp handling
+        const toDate = (ts: any) => {
+            if (!ts) return null;
+            if (typeof ts.toDate === 'function') return ts.toDate();
+            if (ts._seconds) return new Date(ts._seconds * 1000);
+            if (ts instanceof Date) return ts;
+            return new Date(ts);
+        };
+
+        const targetDate = toDate(goal.targetDate) || addDays(new Date(), 30);
+        const createdAt = toDate(goal.createdAt) || addDays(new Date(), -30);
+
         // Fetch AI aggregated insights for monthly income/expenses Baseline
         const summarySnap = await adminDb.doc(`users/${uid}/finance_insights/summary`).get();
         let baselineIncome = 5000; // Mock default if no data
@@ -68,9 +83,6 @@ export async function POST(req: NextRequest) {
         const dailyBaselineAllowance = monthlyDiscretionary / 30;
 
         // Apply Savings Goal logic
-        const targetDate = goal.targetDate.toDate();
-        const createdAt = goal.createdAt?.toDate() || addDays(new Date(), -30); // Fallback to 30 days ago if new
-
         const totalGoalPeriodDays = Math.max(1, Math.ceil((targetDate.getTime() - createdAt.getTime()) / (1000 * 3600 * 24)));
         const amountToSaveTotal = Math.max(0, goal.goalAmount - goal.startingBalance);
 
@@ -78,6 +90,8 @@ export async function POST(req: NextRequest) {
         const requiredSavingsToday = amountToSaveTotal / totalGoalPeriodDays;
 
         const finalDailyAllowance = Math.max(0, dailyBaselineAllowance - requiredSavingsToday);
+
+        console.log(`[Rebuild] UID: ${uid}, Date: ${todayStr}, Allowance: ${finalDailyAllowance}, Goal: ${goal.goalAmount}`);
 
         // Look at yesterday for carryover
         const yesterdayStr = format(addDays(new Date(), -1), 'yyyy-MM-dd');
