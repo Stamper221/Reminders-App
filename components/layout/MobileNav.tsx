@@ -10,7 +10,8 @@ import {
     Clock,
     Plus,
     Settings,
-    Briefcase
+    Briefcase,
+    Wallet
 } from "lucide-react";
 import { useReminderModal } from "@/components/providers/ReminderModalProvider";
 import { useSettingsModal } from "@/components/providers/SettingsModalProvider";
@@ -25,7 +26,7 @@ export function MobileNav() {
         { href: "/", label: "Today", icon: LayoutDashboard },
         { href: "/upcoming", label: "Upcoming", icon: Clock },
         { href: "/routines", label: "Routines", icon: Briefcase },
-        { href: "/completed", label: "Done", icon: CheckCircle },
+        { href: "/finance/analyze", label: "Finance", icon: Wallet },
         { href: "#settings", label: "Settings", icon: Settings, onClick: openSettings },
     ];
 
@@ -46,7 +47,7 @@ export function MobileNav() {
             <div className="glass border-t border-border/50 safe-area-bottom">
                 <div className="flex justify-around items-center h-16 px-1">
                     {links.map((link) => {
-                        const isActive = pathname === link.href;
+                        const isActive = pathname === link.href || (link.href === '/finance/analyze' && pathname.startsWith('/finance'));
                         const Icon = link.icon;
 
                         if (link.onClick) {

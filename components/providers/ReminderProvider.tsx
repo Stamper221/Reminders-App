@@ -199,7 +199,11 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
                 lastCompletedDocRef.current = snapshot.docs[snapshot.docs.length - 1];
             }
 
-            setCompletedReminders(prev => [...prev, ...newItems]);
+            setCompletedReminders(prev => {
+                const existingIds = new Set(prev.map(item => item.id));
+                const uniqueNewItems = newItems.filter(item => !existingIds.has(item.id));
+                return [...prev, ...uniqueNewItems];
+            });
             setHasMoreCompleted(snapshot.docs.length === COMPLETED_PAGE_SIZE);
         } catch (err) {
             console.error("[ReminderProvider] Failed to load completed:", err);

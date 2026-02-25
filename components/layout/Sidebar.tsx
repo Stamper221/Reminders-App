@@ -14,6 +14,7 @@ import {
     Briefcase,
     PanelLeftClose,
     PanelLeftOpen,
+    Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -49,6 +50,7 @@ export function Sidebar({ className }: SidebarProps) {
         { href: "/calendar", label: "Calendar", icon: Calendar },
         { href: "/completed", label: "Completed", icon: CheckCircle },
         { href: "/routines", label: "Routines", icon: Briefcase },
+        { href: "/finance/analyze", label: "Finance", icon: Wallet },
     ];
 
     const userInitial = user?.email?.charAt(0).toUpperCase() || "U";
@@ -98,7 +100,7 @@ export function Sidebar({ className }: SidebarProps) {
                 )}
                 <nav className="space-y-1">
                     {links.map((link) => {
-                        const isActive = pathname === link.href;
+                        const isActive = pathname === link.href || (link.href === '/finance/analyze' && pathname.startsWith('/finance'));
                         return (
                             <Link
                                 key={link.href}

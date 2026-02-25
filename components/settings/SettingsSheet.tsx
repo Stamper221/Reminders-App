@@ -18,7 +18,7 @@ import { useSound } from "@/components/providers/SoundProvider";
 import { PushNotificationManager } from "./PushNotificationManager";
 import { ConnectedDevices } from "./ConnectedDevices";
 import { ThemeSelector } from "./ThemeSelector";
-
+import { wipeUserFinanceData } from "@/lib/finance";
 const schema = z.object({
     phoneNumber: z.string().optional(),
     smsOptIn: z.boolean(),
@@ -245,6 +245,35 @@ export function SettingsSheet() {
                                 </div>
                             </div>
                             <Input id="timezone" {...register("timezone")} readOnly disabled className="bg-muted" />
+                        </div>
+
+                        {/* Privacy & Data */}
+                        <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 space-y-3">
+                            <div className="flex flex-col gap-1 mb-2">
+                                <span className="text-sm font-medium text-red-500">Danger Zone</span>
+                                <span className="text-[11px] text-muted-foreground">Permanently delete data from your account.</span>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                className="w-full"
+                                onClick={async () => {
+                                    if (!window.confirm("Are you sure you want to permanently delete ALL your Finance data? This cannot be undone.")) return;
+                                    if (!user) return;
+                                    try {
+                                        setLoading(true);
+                                        await wipeUserFinanceData(user.uid);
+                                        toast.success("Finance data deleted successfully.");
+                                    } catch (e) {
+                                        toast.error("Failed to delete finance data.");
+                                    } finally {
+                                        setLoading(false);
+                                    }
+                                }}
+                            >
+                                Delete All Finance Data
+                            </Button>
                         </div>
                     </div>
                 </form>
