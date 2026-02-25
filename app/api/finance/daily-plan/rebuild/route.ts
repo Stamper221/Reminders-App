@@ -17,26 +17,39 @@ export async function POST(req: NextRequest) {
         const uid = body.uid;
         if (!uid) return NextResponse.json({ error: "Missing uid" }, { status: 400 });
 
-        // Fetch user goals - Use newest active goal
-        // We fetch all active goals and sort in memory to avoid requiring a composite index in deployment
-        const goalsSnap = await adminDb.collection(`users/${uid}/finance_goals`)
-            .where("status", "==", "active")
-            .get();
+        const todayStr = body.dateStr || format(new Date(), 'yyyy-MM-dd');
+        const goalId = body.goalId;
 
-        if (goalsSnap.empty) {
-            return NextResponse.json({ success: true, message: "No active goals" });
+        let goal: any = null;
+
+        if (goalId) {
+            const goalDoc = await adminDb.doc(`users/${uid}/finance_goals/${goalId}`).get();
+            if (goalDoc.exists) {
+                goal = { id: goalDoc.id, ...goalDoc.data() };
+            }
         }
 
-        // Sort by createdAt descending in memory
-        const sortedGoals = goalsSnap.docs
-            .map(d => ({ id: d.id, ...d.data() }))
-            .sort((a: any, b: any) => {
-                const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?._seconds * 1000 || 0);
-                const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?._seconds * 1000 || 0);
-                return timeB - timeA;
-            });
+        if (!goal) {
+            // Fallback to fetch newest active goal
+            // We fetch all active goals and sort in memory to avoid requiring a composite index in deployment
+            const goalsSnap = await adminDb.collection(`users/${uid}/finance_goals`)
+                .where("status", "==", "active")
+                .get();
 
-        const goal = sortedGoals[0] as any;
+            if (goalsSnap.empty) {
+                return NextResponse.json({ success: true, message: "No active goals" });
+            }
+
+            // Sort by createdAt descending in memory
+            const sortedGoals = goalsSnap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .sort((a: any, b: any) => {
+                    const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?._seconds * 1000 || 0);
+                    const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?._seconds * 1000 || 0);
+                    return timeB - timeA;
+                });
+            goal = sortedGoals[0];
+        }
 
         // Fetch AI aggregated insights for monthly income/expenses Baseline
         const summarySnap = await adminDb.doc(`users/${uid}/finance_insights/summary`).get();
@@ -65,8 +78,6 @@ export async function POST(req: NextRequest) {
         const requiredSavingsToday = amountToSaveTotal / totalGoalPeriodDays;
 
         const finalDailyAllowance = Math.max(0, dailyBaselineAllowance - requiredSavingsToday);
-
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
 
         // Look at yesterday for carryover
         const yesterdayStr = format(addDays(new Date(), -1), 'yyyy-MM-dd');

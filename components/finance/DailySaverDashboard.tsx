@@ -96,7 +96,10 @@ export function DailySaverDashboard() {
                     'internal-auth': process.env.NEXT_PUBLIC_DEV_CRON_SECRET || "",
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ uid: user.uid })
+                body: JSON.stringify({
+                    uid: user.uid,
+                    dateStr: todayStr
+                })
             });
             toast.success("Daily plan updated");
         } catch (e) {

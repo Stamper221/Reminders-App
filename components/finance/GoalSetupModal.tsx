@@ -67,7 +67,7 @@ export function GoalSetupModal({ open, onOpenChange, onSuccess }: GoalSetupModal
             }
 
             // 2. Add the new goal
-            await addDoc(activeGoalsRef, {
+            const newGoalDoc = await addDoc(activeGoalsRef, {
                 uid: user.uid,
                 goalAmount: gAmount,
                 startingBalance: isNaN(sBal) ? 0 : sBal,
@@ -78,7 +78,9 @@ export function GoalSetupModal({ open, onOpenChange, onSuccess }: GoalSetupModal
                 updatedAt: serverTimestamp()
             });
 
-            toast.success("Goal set! Generating your first daily plan...");
+            const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+            toast.success("Goal set! Generating your daily plan...");
             if (onSuccess) onSuccess();
             onOpenChange(false);
 
@@ -86,7 +88,7 @@ export function GoalSetupModal({ open, onOpenChange, onSuccess }: GoalSetupModal
             const rebuildToast = toast.loading("Calculating your new daily allowance...");
             try {
                 const cronSecret = process.env.NEXT_PUBLIC_DEV_CRON_SECRET || "";
-                if (!cronSecret) console.warn("NEXT_PUBLIC_DEV_CRON_SECRET is missing. Rebuild API may fail with 401.");
+                if (!cronSecret) console.warn("NEXT_PUBLIC_DEV_CRON_SECRET is missing.");
 
                 const response = await fetch('/api/finance/daily-plan/rebuild', {
                     method: 'POST',
@@ -94,7 +96,11 @@ export function GoalSetupModal({ open, onOpenChange, onSuccess }: GoalSetupModal
                         'internal-auth': cronSecret,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ uid: user.uid })
+                    body: JSON.stringify({
+                        uid: user.uid,
+                        goalId: newGoalDoc.id,
+                        dateStr: todayStr
+                    })
                 });
 
                 if (!response.ok) {
