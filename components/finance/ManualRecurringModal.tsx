@@ -91,12 +91,18 @@ export function ManualRecurringModal({ open, onOpenChange }: ManualRecurringModa
 
             toast.success(state ? "Marked as recurring bill" : "Removed from recurring");
 
-            // Trigger recalculate
-            const token = await user.getIdToken();
-            fetch('/api/finance/recalculate', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            // Trigger recalculate in background
+            (async () => {
+                try {
+                    const token = await user.getIdToken();
+                    await fetch('/api/finance/recalculate', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                } catch (reErr) {
+                    console.error("Background recalculate failed:", reErr);
+                }
+            })();
         } catch (e) {
             console.error("Toggle failed:", e);
             toast.error("Failed to update transaction");
@@ -107,8 +113,15 @@ export function ManualRecurringModal({ open, onOpenChange }: ManualRecurringModa
         if (!user || !virtualLabel || !virtualAmount) return;
         setIsAddingVirtual(true);
         try {
-            const amount = parseFloat(virtualAmount);
-            if (isNaN(amount)) throw new Error("Invalid amount");
+            // Safer parsing: Remove any non-numeric characters except decimal/minus
+            const cleanAmtStr = virtualAmount.replace(/[^0-9.-]/g, '');
+            const amount = parseFloat(cleanAmtStr);
+
+            if (isNaN(amount) || amount <= 0) {
+                toast.error("Please enter a valid amount");
+                setIsAddingVirtual(false);
+                return;
+            }
 
             await addDoc(collection(db, `users/${user.uid}/finance_manual_recurring`), {
                 label: virtualLabel,
@@ -119,19 +132,28 @@ export function ManualRecurringModal({ open, onOpenChange }: ManualRecurringModa
             });
 
             toast.success("Manual bill added!");
+
+            // Clear inputs and close
             setVirtualLabel("");
             setVirtualAmount("");
             onOpenChange(false);
 
-            // Trigger recalculate
-            const token = await user.getIdToken();
-            fetch('/api/finance/recalculate', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            // Trigger recalculate in background
+            (async () => {
+                try {
+                    const token = await user.getIdToken();
+                    await fetch('/api/finance/recalculate', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                } catch (reErr) {
+                    console.error("Background recalculate failed:", reErr);
+                }
+            })();
+
         } catch (e) {
             console.error("Add virtual failed:", e);
-            toast.error("Failed to add manual bill");
+            toast.error("Database error. Check your connection.");
         } finally {
             setIsAddingVirtual(false);
         }
