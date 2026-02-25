@@ -88,9 +88,9 @@ export function DailySaverDashboard() {
 
     const handleRebuildPlan = async () => {
         if (!user) return;
+        const syncToast = toast.loading("Syncing with your goals...");
         try {
-            // Uses a manual fetch with our local DEV secret map to bypass cron lock for testing
-            await fetch('/api/finance/daily-plan/rebuild', {
+            const response = await fetch('/api/finance/daily-plan/rebuild', {
                 method: 'POST',
                 headers: {
                     'internal-auth': process.env.NEXT_PUBLIC_DEV_CRON_SECRET || "",
@@ -101,9 +101,17 @@ export function DailySaverDashboard() {
                     dateStr: todayStr
                 })
             });
-            toast.success("Daily plan updated");
+
+            if (!response.ok) {
+                const err = await response.text();
+                console.error("Sync Engine Failed:", err);
+                toast.error("Sync failed. Check your goal settings.", { id: syncToast });
+            } else {
+                toast.success("Daily plan updated", { id: syncToast });
+            }
         } catch (e) {
-            toast.error("Failed to update plan");
+            console.error("Sync error:", e);
+            toast.error("Failed to update plan", { id: syncToast });
         }
     };
 
@@ -158,8 +166,13 @@ export function DailySaverDashboard() {
     }
 
 
-    const remaining = (plan!.allowedSpend + plan!.carryOver) - plan!.spentToday;
-    const progressPerc = Math.min(100, Math.max(0, (plan!.spentToday / (plan!.allowedSpend + plan!.carryOver)) * 100));
+    const totalBudget = (plan!.allowedSpend + (plan!.carryOver || 0));
+    const remaining = totalBudget - plan!.spentToday;
+
+    // Improved progress calculation to handle zero budget (Safe Division)
+    const progressPerc = totalBudget > 0
+        ? Math.min(100, Math.max(0, (plan!.spentToday / totalBudget) * 100))
+        : (plan!.spentToday > 0 ? 100 : 0);
 
     return (
         <div className="space-y-6">
@@ -211,7 +224,7 @@ export function DailySaverDashboard() {
                             </div>
                             <div className="flex justify-between text-xs font-medium">
                                 <span>Spent: ${plan!.spentToday.toFixed(2)}</span>
-                                {plan!.carryOver > 0 && <span className="text-green-500">(Includes ${plan!.carryOver.toFixed(0)} carryover)</span>}
+                                {plan!.carryOver > 0 && <span className="text-green-500">+$ {plan!.carryOver.toFixed(0)} Carryover Budget</span>}
                             </div>
                         </div>
                     </CardContent>

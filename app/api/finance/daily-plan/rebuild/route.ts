@@ -93,15 +93,8 @@ export async function POST(req: NextRequest) {
 
         console.log(`[Rebuild] UID: ${uid}, Date: ${todayStr}, Allowance: ${finalDailyAllowance}, Goal: ${goal.goalAmount}`);
 
-        // Look at yesterday for carryover
-        const yesterdayStr = format(addDays(new Date(), -1), 'yyyy-MM-dd');
-        const yesterdaySnap = await adminDb.doc(`users/${uid}/finance_daily_plan/${yesterdayStr}`).get();
-
-        let carryOver = 0;
-        if (yesterdaySnap.exists) {
-            const yData = yesterdaySnap.data()!;
-            carryOver = yData.allowedSpend + yData.carryOver - yData.spentToday;
-        }
+        // Carryover logic disabled per user request
+        const carryOver = 0;
 
         const planRef = adminDb.doc(`users/${uid}/finance_daily_plan/${todayStr}`);
 
