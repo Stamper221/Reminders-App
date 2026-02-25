@@ -259,6 +259,29 @@ export async function recalculateAllInsights(uid: string) {
         };
     }
 
+    // NEW: Inject Pure Virtual Recurring Bills (items without transactions)
+    try {
+        const virtualSnap = await adminDb.collection(`users/${uid}/finance_manual_recurring`).get();
+        for (const vDoc of virtualSnap.docs) {
+            const vData = vDoc.data();
+            const vM = (vData.label || "Manual Bill").toUpperCase();
+
+            // Skip if already added via transaction flag (though unlikely for virtuals)
+            if (recurringBillsMap[vM]) continue;
+
+            const vAmt = vData.amount || 0;
+            predictedBillsTotal += vAmt;
+            recurringBillsMap[vM] = {
+                merchant: vM,
+                label: vData.label,
+                amount: vAmt,
+                confidence: "Virtual Bill"
+            };
+        }
+    } catch (ve) {
+        console.error("Failed to fetch virtual recurring bills:", ve);
+    }
+
     if (candidateGroups.length > 0 && process.env.OPENAI_API_KEY) {
         try {
             const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });

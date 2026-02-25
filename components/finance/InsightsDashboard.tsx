@@ -9,9 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, Legend } from "recharts";
-import { Lightbulb, TrendingUp, TrendingDown, RefreshCcw, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Lightbulb, TrendingUp, TrendingDown, RefreshCcw, Loader2, ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { useMemo } from "react";
+import { ManualRecurringModal } from "./ManualRecurringModal";
 
 const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1'];
 
@@ -25,6 +26,7 @@ export function InsightsDashboard() {
     const [isUpdatingOverrides, setIsUpdatingOverrides] = useState(false);
     const [loading, setLoading] = useState(true);
     const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+    const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
     const toggleCategory = (cat: string) => {
         setExpandedCategories(prev => {
@@ -252,9 +254,15 @@ export function InsightsDashboard() {
 
             {/* Full-width Recurring Management */}
             <Card className="glass border-border/50">
-                <CardHeader>
-                    <CardTitle className="text-base">Recurring Bills Management</CardTitle>
-                    <CardDescription>Review and manage your true recurring bills versus frequent spending</CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle className="text-base">Recurring Bills Management</CardTitle>
+                        <CardDescription>Review and manage your true recurring bills versus frequent spending</CardDescription>
+                    </div>
+                    <Button onClick={() => setIsManualModalOpen(true)} size="sm" className="h-8 gap-1.5 font-bold">
+                        <Plus className="h-4 w-4" />
+                        Add Manual
+                    </Button>
                 </CardHeader>
                 <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -396,6 +404,7 @@ export function InsightsDashboard() {
                 </CardContent>
             </Card>
 
+            <ManualRecurringModal open={isManualModalOpen} onOpenChange={setIsManualModalOpen} />
         </div>
     );
 }
