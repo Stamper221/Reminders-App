@@ -18,16 +18,25 @@ export async function POST(req: NextRequest) {
         if (!uid) return NextResponse.json({ error: "Missing uid" }, { status: 400 });
 
         // Fetch user goals - Use newest active goal
+        // We fetch all active goals and sort in memory to avoid requiring a composite index in deployment
         const goalsSnap = await adminDb.collection(`users/${uid}/finance_goals`)
             .where("status", "==", "active")
-            .orderBy("createdAt", "desc")
-            .limit(1)
             .get();
+
         if (goalsSnap.empty) {
             return NextResponse.json({ success: true, message: "No active goals" });
         }
 
-        const goal = goalsSnap.docs[0].data();
+        // Sort by createdAt descending in memory
+        const sortedGoals = goalsSnap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a: any, b: any) => {
+                const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?._seconds * 1000 || 0);
+                const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?._seconds * 1000 || 0);
+                return timeB - timeA;
+            });
+
+        const goal = sortedGoals[0] as any;
 
         // Fetch AI aggregated insights for monthly income/expenses Baseline
         const summarySnap = await adminDb.doc(`users/${uid}/finance_insights/summary`).get();

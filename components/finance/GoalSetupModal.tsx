@@ -85,18 +85,22 @@ export function GoalSetupModal({ open, onOpenChange, onSuccess }: GoalSetupModal
             // Rebuild the daily plan immediately
             const rebuildToast = toast.loading("Calculating your new daily allowance...");
             try {
+                const cronSecret = process.env.NEXT_PUBLIC_DEV_CRON_SECRET || "";
+                if (!cronSecret) console.warn("NEXT_PUBLIC_DEV_CRON_SECRET is missing. Rebuild API may fail with 401.");
+
                 const response = await fetch('/api/finance/daily-plan/rebuild', {
                     method: 'POST',
                     headers: {
-                        'internal-auth': process.env.NEXT_PUBLIC_DEV_CRON_SECRET || "",
+                        'internal-auth': cronSecret,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ uid: user.uid })
                 });
 
                 if (!response.ok) {
-                    console.error("Rebuild API failed:", await response.text());
-                    toast.error("Goal saved, but allowance calculation failed. Try a manual sync.", { id: rebuildToast });
+                    const errorText = await response.text();
+                    console.error("Rebuild API failed:", errorText);
+                    toast.error(`Goal saved, but allowance calculation failed (${response.status}). Try a manual sync.`, { id: rebuildToast });
                 } else {
                     toast.success("Safe daily limit updated!", { id: rebuildToast });
                 }
