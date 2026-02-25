@@ -83,14 +83,27 @@ export function GoalSetupModal({ open, onOpenChange, onSuccess }: GoalSetupModal
             onOpenChange(false);
 
             // Rebuild the daily plan immediately
-            await fetch('/api/finance/daily-plan/rebuild', {
-                method: 'POST',
-                headers: {
-                    'internal-auth': process.env.NEXT_PUBLIC_DEV_CRON_SECRET || "",
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ uid: user.uid })
-            });
+            const rebuildToast = toast.loading("Calculating your new daily allowance...");
+            try {
+                const response = await fetch('/api/finance/daily-plan/rebuild', {
+                    method: 'POST',
+                    headers: {
+                        'internal-auth': process.env.NEXT_PUBLIC_DEV_CRON_SECRET || "",
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ uid: user.uid })
+                });
+
+                if (!response.ok) {
+                    console.error("Rebuild API failed:", await response.text());
+                    toast.error("Goal saved, but allowance calculation failed. Try a manual sync.", { id: rebuildToast });
+                } else {
+                    toast.success("Safe daily limit updated!", { id: rebuildToast });
+                }
+            } catch (rebuildErr) {
+                console.error("Failed to trigger plan rebuild:", rebuildErr);
+                toast.error("Failed to sync daily allowance.", { id: rebuildToast });
+            }
 
         } catch (error) {
             console.error("Failed to save goal", error);

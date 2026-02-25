@@ -7,7 +7,9 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
     try {
         const authHeader = req.headers.get("internal-auth");
-        if (authHeader !== process.env.CRON_SECRET) {
+        const cronSecret = process.env.CRON_SECRET || process.env.NEXT_PUBLIC_DEV_CRON_SECRET;
+
+        if (authHeader !== cronSecret) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -15,8 +17,12 @@ export async function POST(req: NextRequest) {
         const uid = body.uid;
         if (!uid) return NextResponse.json({ error: "Missing uid" }, { status: 400 });
 
-        // Fetch user goals
-        const goalsSnap = await adminDb.collection(`users/${uid}/finance_goals`).where("status", "==", "active").limit(1).get();
+        // Fetch user goals - Use newest active goal
+        const goalsSnap = await adminDb.collection(`users/${uid}/finance_goals`)
+            .where("status", "==", "active")
+            .orderBy("createdAt", "desc")
+            .limit(1)
+            .get();
         if (goalsSnap.empty) {
             return NextResponse.json({ success: true, message: "No active goals" });
         }
