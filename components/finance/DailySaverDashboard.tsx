@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { motion, AnimatePresence } from "framer-motion";
-import { TrendingDown, TrendingUp, Trophy, Flame, Target, Plus, AlertCircle, RefreshCw, Wallet, Calendar as CalendarIcon, ArrowRight, Trash2, History, XCircle, FileText } from "lucide-react";
+import { TrendingDown, TrendingUp, Trophy, Flame, Target, Plus, AlertCircle, RefreshCw, Wallet, Calendar as CalendarIcon, ArrowRight, Trash2, History, XCircle, FileText, Edit2 } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,69 +37,63 @@ export function DailySaverDashboard() {
 
     // UI states for Gamification
     const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const [editingManualTx, setEditingManualTx] = useState<any | null>(null);
+    const [editAmount, setEditAmount] = useState("");
+    const [editDescription, setEditDescription] = useState("");
 
     useEffect(() => {
         if (!user) return;
 
-        // Combine Goal and Plan subscriptions
-        let unsubGoal = () => { };
-        let unsubPlan = () => { };
-        let unsubManualTxs = () => { };
+        // Goals
+        const gQ = query(collection(db, `users/${user.uid}/finance_goals`), where("status", "==", "active"), limit(1));
+        const unsubGoal = onSnapshot(gQ, (snap) => {
+            if (!snap.empty) setGoal({ id: snap.docs[0].id, ...snap.docs[0].data() } as FinanceGoal);
+            else setGoal(null);
+        }, (err) => console.error("Goal listener error:", err));
 
-        const fetchInitial = async () => {
-            // Goals
-            const gQ = query(collection(db, `users/${user.uid}/finance_goals`), where("status", "==", "active"), limit(1));
-            unsubGoal = onSnapshot(gQ, {
-                next: (snap) => {
-                    if (!snap.empty) setGoal({ id: snap.docs[0].id, ...snap.docs[0].data() } as FinanceGoal);
-                    else setGoal(null);
-                },
-                error: (err) => {
-                    console.error("Goal listener error:", err);
-                    setGoal(null);
-                }
+        // Today Plan
+        const planRef = doc(db, `users/${user.uid}/finance_daily_plan/${todayStr}`);
+        const unsubPlan = onSnapshot(planRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setPlan({ id: docSnap.id, ...docSnap.data() } as FinanceDailyPlan);
+            } else {
+                setPlan(null);
+            }
+            setLoading(false);
+        }, (err) => {
+            console.error("Plan listener error:", err);
+            setPlan(null);
+            setLoading(false);
+        });
+
+        // Today's Manual Transactions for the "Quick Log" list
+        const manualTxsRef = collection(db, `users/${user.uid}/finance_transactions`);
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date();
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const mTxsQ = query(
+            manualTxsRef,
+            where("uid", "==", user.uid),
+            where("isManual", "==", true),
+            where("date", ">=", startOfDay),
+            where("date", "<=", endOfDay)
+        );
+
+        const unsubManualTxs = onSnapshot(mTxsQ, (snap) => {
+            const txs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            txs.sort((a: any, b: any) => {
+                const tA = a.date?.toMillis ? a.date.toMillis() : (a.date?._seconds * 1000 || 0);
+                const tB = b.date?.toMillis ? b.date.toMillis() : (b.date?._seconds * 1000 || 0);
+                return tB - tA;
             });
-
-            // Today Plan
-            const planRef = doc(db, `users/${user.uid}/finance_daily_plan/${todayStr}`);
-            unsubPlan = onSnapshot(planRef, {
-                next: (docSnap) => {
-                    if (docSnap.exists()) {
-                        setPlan({ id: docSnap.id, ...docSnap.data() } as FinanceDailyPlan);
-                    } else {
-                        setPlan(null);
-                    }
-                    setLoading(false);
-                },
-                error: (err) => {
-                    console.error("Plan listener error:", err);
-                    setPlan(null);
-                    setLoading(false);
-                }
-            });
-
-            // Today's Manual Transactions for the "Quick Log" list
-            const manualTxsRef = collection(db, `users/${user.uid}/finance_transactions`);
-            const mTxsQ = query(
-                manualTxsRef,
-                where("uid", "==", user.uid),
-                where("isManual", "==", true),
-                where("date", ">=", new Date(new Date().setHours(0, 0, 0, 0))),
-                where("date", "<=", new Date(new Date().setHours(23, 59, 59, 999)))
-            );
-            unsubManualTxs = onSnapshot(mTxsQ, (snap) => {
-                const txs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                // Sort by date descending
-                txs.sort((a: any, b: any) => {
-                    const tA = a.date?.toMillis ? a.date.toMillis() : (a.date?._seconds * 1000 || 0);
-                    const tB = b.date?.toMillis ? b.date.toMillis() : (b.date?._seconds * 1000 || 0);
-                    return tB - tA;
-                });
-                setDailyManualTransactions(txs);
-            });
-        };
-
-        fetchInitial();
+            setDailyManualTransactions(txs);
+        }, (err) => {
+            console.error("Manual transactions listener error:", err);
+            // Fallback: If index is missing, try a simpler query or at least don't crash the UI
+            toast.error("Live updates for manual logs might be unavailable (indexing).");
+        });
 
         return () => {
             unsubGoal();
@@ -244,6 +238,48 @@ export function DailySaverDashboard() {
     };
 
 
+    const handleEditManualTx = async () => {
+        if (!user || !plan || !editingManualTx) return;
+        const newAmt = parseFloat(editAmount);
+        if (isNaN(newAmt) || newAmt <= 0) {
+            toast.error("Valid amount required");
+            return;
+        }
+
+        const oldAmt = editingManualTx.amount;
+        const desc = editDescription.trim() || "Manual Expense";
+
+        try {
+            const batch = writeBatch(db);
+            // 1. Update Transaction
+            batch.update(doc(db, `users/${user.uid}/finance_transactions/${editingManualTx.id}`), {
+                amount: newAmt,
+                merchant: desc,
+                originalDescription: desc
+            });
+            // 2. Adjust Daily Plan
+            const diff = newAmt - oldAmt;
+            batch.update(doc(db, `users/${user.uid}/finance_daily_plan/${plan.id}`), {
+                spentToday: plan.spentToday + diff
+            });
+
+            await batch.commit();
+            setEditingManualTx(null);
+            toast.success("Expense updated!");
+
+            // Trigger global recalculate in background
+            fetch('/api/finance/recalculate', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${await user.getIdToken()}` }
+            }).catch(e => console.error("Background sync failed:", e));
+
+        } catch (e) {
+            console.error("Edit failed:", e);
+            toast.error("Failed to update expense");
+        }
+    };
+
+
     if (loading) {
         return <Skeleton className="h-[400px] w-full rounded-2xl" />;
     }
@@ -372,16 +408,30 @@ export function DailySaverDashboard() {
                                                 })()}
                                             </span>
                                         </div>
-                                        <div className="flex items-center gap-4">
+                                        <div className="flex items-center gap-2">
                                             <span className="font-mono font-black text-red-500 text-lg">-${tx.amount.toFixed(2)}</span>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                                                onClick={() => handleDeleteExpense(tx.id, tx.amount)}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
+                                            <div className="flex items-center">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onClick={() => {
+                                                        setEditingManualTx(tx);
+                                                        setEditAmount(tx.amount.toString());
+                                                        setEditDescription(tx.merchant);
+                                                    }}
+                                                >
+                                                    <Edit2 className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onClick={() => handleDeleteExpense(tx.id, tx.amount)}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -546,9 +596,48 @@ export function DailySaverDashboard() {
                             </div>
                         </div>
                     </div>
-                    <div className="flex justify-end gap-3">
-                        <Button variant="ghost" onClick={() => setIsAddingExpense(false)}>Cancel</Button>
-                        <Button onClick={submitExpense}>Log Expense</Button>
+                    <div className="flex justify-end gap-3 px-6 pb-6">
+                        <Button variant="ghost" className="rounded-xl" onClick={() => setIsAddingExpense(false)}>Cancel</Button>
+                        <Button className="rounded-xl px-8 font-bold" onClick={submitExpense}>Log Expense</Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Log Modal */}
+            <Dialog open={!!editingManualTx} onOpenChange={(open) => !open && setEditingManualTx(null)}>
+                <DialogContent className="sm:max-w-md p-0 overflow-hidden glass border-border/50">
+                    <DialogHeader className="p-6 pb-0">
+                        <DialogTitle>Edit Expense</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-6 py-6 px-6">
+                        <div className="space-y-2 text-center">
+                            <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Amount</label>
+                            <Input
+                                type="number"
+                                placeholder="0.00"
+                                className="text-5xl h-24 text-center font-black border-none bg-transparent focus-visible:ring-0"
+                                value={editAmount}
+                                onChange={(e) => setEditAmount(e.target.value)}
+                                autoFocus
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest pl-1">Description</label>
+                            <div className="relative">
+                                <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Description..."
+                                    className="pl-10 h-12 bg-muted/30 rounded-xl"
+                                    value={editDescription}
+                                    onChange={(e) => setEditDescription(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex justify-end gap-3 px-6 pb-6 pt-2">
+                        <Button variant="ghost" className="rounded-xl" onClick={() => setEditingManualTx(null)}>Cancel</Button>
+                        <Button className="rounded-xl px-8 font-bold" onClick={handleEditManualTx}>Update Expense</Button>
                     </div>
                 </DialogContent>
             </Dialog>
